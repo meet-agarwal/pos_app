@@ -107,7 +107,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
     return _allItems
         .where((item) =>
             item.name.toLowerCase().contains(q) ||
-            item.code.toLowerCase().contains(q))
+            (item.code?.toLowerCase().contains(q) ?? false))
         .toList();
   }
 
@@ -118,7 +118,13 @@ class _ItemsScreenState extends State<ItemsScreen> {
       int cmp;
       switch (_sortColumn) {
         case 'code':
-          cmp = a.code.compareTo(b.code);
+          cmp = (a.code ?? '').compareTo(b.code ?? '');
+          break;
+        case 'hindiName':
+          cmp = (a.hindiName ?? '').compareTo(b.hindiName ?? '');
+          break;
+        case 'groupName':
+          cmp = (a.groupName ?? '').compareTo(b.groupName ?? '');
           break;
         case 'unit':
           cmp = a.unit.compareTo(b.unit);
@@ -316,9 +322,12 @@ class _ItemsScreenState extends State<ItemsScreen> {
       }
 
       // Step 6: Validate the header row (exact order required)
+      // New column order: code | name | hindi_name | group_name | unit | selling_price
       final expectedHeaders = [
         ItemColumns.code,
         ItemColumns.name,
+        ItemColumns.hindiName,
+        ItemColumns.groupName,
         ItemColumns.unit,
         ItemColumns.sellingPrice,
       ];
@@ -331,6 +340,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
       }
 
       // Step 7: Parse data rows into string maps
+      // Column positions: 0=code, 1=name, 2=hindi_name, 3=group_name, 4=unit, 5=selling_price
       final dataRows = <Map<String, String>>[];
       for (int r = 1; r < sheet.rows.length; r++) {
         final row = sheet.rows[r];
@@ -340,11 +350,12 @@ class _ItemsScreenState extends State<ItemsScreen> {
           continue;
         }
         dataRows.add({
-          ItemColumns.code: _cellToString(row.length > 0 ? row[0] : null),
-          ItemColumns.name: _cellToString(row.length > 1 ? row[1] : null),
-          ItemColumns.unit: _cellToString(row.length > 2 ? row[2] : null),
-          ItemColumns.sellingPrice:
-              _cellToString(row.length > 3 ? row[3] : null),
+          ItemColumns.code:         _cellToString(row.length > 0 ? row[0] : null),
+          ItemColumns.name:         _cellToString(row.length > 1 ? row[1] : null),
+          ItemColumns.hindiName:    _cellToString(row.length > 2 ? row[2] : null),
+          ItemColumns.groupName:    _cellToString(row.length > 3 ? row[3] : null),
+          ItemColumns.unit:         _cellToString(row.length > 4 ? row[4] : null),
+          ItemColumns.sellingPrice: _cellToString(row.length > 5 ? row[5] : null),
         });
       }
 
@@ -454,7 +465,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
         else
           Expanded(
             child: Container(
-              color: AppColors.surfaceWhite,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.surfaceWhite,

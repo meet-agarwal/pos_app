@@ -138,7 +138,21 @@ class _ItemsDataTableState extends State<ItemsDataTable> {
           _HeaderCell(
               label: 'Item Name',
               column: 'name',
-              flex: 5,
+              flex: 4,
+              sortColumn: widget.sortColumn,
+              sortAscending: widget.sortAscending,
+              onSort: widget.onSort),
+          _HeaderCell(
+              label: 'Hindi Name',
+              column: 'hindiName',
+              flex: 3,
+              sortColumn: widget.sortColumn,
+              sortAscending: widget.sortAscending,
+              onSort: widget.onSort),
+          _HeaderCell(
+              label: 'Group',
+              column: 'groupName',
+              flex: 2,
               sortColumn: widget.sortColumn,
               sortAscending: widget.sortAscending,
               onSort: widget.onSort),
@@ -208,15 +222,52 @@ class _ItemsDataTableState extends State<ItemsDataTable> {
             Expanded(
               flex: 2,
               child: _Cell(
-                text: item.code,
+                text: item.code ?? '—',
                 style: AppTextStyles.tableCellMono,
               ),
             ),
 
             // Name
             Expanded(
-              flex: 5,
+              flex: 4,
               child: _Cell(text: item.name),
+            ),
+
+            // Hindi Name
+            Expanded(
+              flex: 3,
+              child: _Cell(
+                text: item.hindiName ?? '',
+                style: AppTextStyles.tableCell.copyWith(
+                    color: item.hindiName != null
+                        ? AppColors.textPrimary
+                        : AppColors.textDisabled),
+              ),
+            ),
+
+            // Group
+            Expanded(
+              flex: 2,
+              child: item.groupName != null
+                  ? Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        item.groupName!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  : const SizedBox(),
             ),
 
             // Unit

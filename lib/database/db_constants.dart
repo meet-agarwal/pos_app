@@ -15,7 +15,7 @@
 const String kDatabaseName = 'pos_database.db';
 
 /// Current schema version.  Bump this when you add/alter tables.
-const int kDatabaseVersion = 1;
+const int kDatabaseVersion = 2;
 
 // ── Table Names ─────────────────────────────────────────────
 
@@ -36,6 +36,8 @@ class ItemColumns {
   static const String id = 'id';
   static const String code = 'code';
   static const String name = 'name';
+  static const String hindiName = 'hindi_name';
+  static const String groupName = 'group_name';
   static const String unit = 'unit';
   static const String sellingPrice = 'selling_price';
 }

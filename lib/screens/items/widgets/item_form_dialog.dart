@@ -34,6 +34,8 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _codeCtrl;
   late final TextEditingController _nameCtrl;
+  late final TextEditingController _hindiNameCtrl;
+  late final TextEditingController _groupNameCtrl;
   late final TextEditingController _unitCtrl;
   late final TextEditingController _priceCtrl;
 
@@ -43,10 +45,12 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   void initState() {
     super.initState();
     final item = widget.item;
-    _codeCtrl = TextEditingController(text: item?.code ?? '');
-    _nameCtrl = TextEditingController(text: item?.name ?? '');
-    _unitCtrl = TextEditingController(text: item?.unit ?? '');
-    _priceCtrl = TextEditingController(
+    _codeCtrl      = TextEditingController(text: item?.code ?? '');
+    _nameCtrl      = TextEditingController(text: item?.name ?? '');
+    _hindiNameCtrl = TextEditingController(text: item?.hindiName ?? '');
+    _groupNameCtrl = TextEditingController(text: item?.groupName ?? '');
+    _unitCtrl      = TextEditingController(text: item?.unit ?? '');
+    _priceCtrl     = TextEditingController(
         text: item != null ? item.sellingPrice.toStringAsFixed(2) : '');
   }
 
@@ -54,6 +58,8 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _hindiNameCtrl.dispose();
+    _groupNameCtrl.dispose();
     _unitCtrl.dispose();
     _priceCtrl.dispose();
     super.dispose();
@@ -62,10 +68,12 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final item = Item(
-      id: widget.item?.id,
-      code: _codeCtrl.text.trim(),
-      name: _nameCtrl.text.trim(),
-      unit: _unitCtrl.text.trim(),
+      id:           widget.item?.id,
+      code:         _codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim(),
+      name:         _nameCtrl.text.trim(),
+      hindiName:    _hindiNameCtrl.text.trim().isEmpty ? null : _hindiNameCtrl.text.trim(),
+      groupName:    _groupNameCtrl.text.trim().isEmpty ? null : _groupNameCtrl.text.trim(),
+      unit:         _unitCtrl.text.trim(),
       sellingPrice: double.parse(_priceCtrl.text.trim()),
     );
     Navigator.of(context).pop(item);
@@ -160,7 +168,45 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Unit + Price in a row
+                // Hindi Name + Group Name (both optional) — side by side
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel('Hindi Name (optional)'),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _hindiNameCtrl,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g. बासमती चावल',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel('Group (optional)'),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _groupNameCtrl,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g. Grains, Dairy…',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+
                 Row(
                   children: [
                     Expanded(

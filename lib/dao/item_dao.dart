@@ -125,17 +125,14 @@ class ItemDao {
 
       try {
         // ── Field extraction & trim ──────────────────────
-        final code = (raw[ItemColumns.code] ?? '').trim();
-        final name = (raw[ItemColumns.name] ?? '').trim();
-        final unit = (raw[ItemColumns.unit] ?? '').trim();
-        final priceRaw = (raw[ItemColumns.sellingPrice] ?? '').trim();
+        final code      = (raw[ItemColumns.code] ?? '').trim();       // optional
+        final name      = (raw[ItemColumns.name] ?? '').trim();
+        final hindiName = (raw[ItemColumns.hindiName] ?? '').trim();  // optional
+        final groupName = (raw[ItemColumns.groupName] ?? '').trim();  // optional
+        final unit      = (raw[ItemColumns.unit] ?? '').trim();
+        final priceRaw  = (raw[ItemColumns.sellingPrice] ?? '').trim();
 
-        // ── Validation ───────────────────────────────────
-        if (code.isEmpty) {
-          errors.add('Row $rowNum: Item code is empty — skipped');
-          failed++;
-          continue;
-        }
+        // ── Validation (only required fields) ────────────
         if (name.isEmpty) {
           errors.add('Row $rowNum: Item name is empty — skipped');
           failed++;
@@ -154,37 +151,45 @@ class ItemDao {
           continue;
         }
 
-        // ── Insert or Update ─────────────────────────────
-        final existing = await db.query(
-          TableNames.items,
-          columns: [ItemColumns.id],
-          where: '${ItemColumns.code} = ?',
-          whereArgs: [code],
-          limit: 1,
-        );
+        // ── Build the field map ───────────────────────────
+        final fields = <String, dynamic>{
+          ItemColumns.name:         name,
+          ItemColumns.hindiName:    hindiName.isEmpty ? null : hindiName,
+          ItemColumns.groupName:    groupName.isEmpty ? null : groupName,
+          ItemColumns.unit:         unit,
+          ItemColumns.sellingPrice: price,
+          // Only store code when it is non-empty
+          if (code.isNotEmpty) ItemColumns.code: code,
+        };
 
-        if (existing.isNotEmpty) {
-          final existingId = existing.first[ItemColumns.id] as int;
-          await db.update(
+        // ── Insert or Update ─────────────────────────────
+        // When a code is provided, check if it already exists → update.
+        // When no code is provided, always insert as a new row.
+        if (code.isNotEmpty) {
+          final existing = await db.query(
             TableNames.items,
-            {
-              ItemColumns.name: name,
-              ItemColumns.unit: unit,
-              ItemColumns.sellingPrice: price,
-            },
-            where: '${ItemColumns.id} = ?',
-            whereArgs: [existingId],
+            columns: [ItemColumns.id],
+            where: '${ItemColumns.code} = ?',
+            whereArgs: [code],
+            limit: 1,
           );
-          updated++;
-        } else {
-          await db.insert(TableNames.items, {
-            ItemColumns.code: code,
-            ItemColumns.name: name,
-            ItemColumns.unit: unit,
-            ItemColumns.sellingPrice: price,
-          });
-          imported++;
+
+          if (existing.isNotEmpty) {
+            final existingId = existing.first[ItemColumns.id] as int;
+            await db.update(
+              TableNames.items,
+              fields,
+              where: '${ItemColumns.id} = ?',
+              whereArgs: [existingId],
+            );
+            updated++;
+            continue;
+          }
         }
+
+        // New row (no code, or code not found)
+        await db.insert(TableNames.items, fields);
+        imported++;
       } catch (e) {
         errors.add('Row $rowNum: Unexpected error — $e');
         failed++;

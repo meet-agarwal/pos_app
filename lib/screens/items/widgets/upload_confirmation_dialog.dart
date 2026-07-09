@@ -26,14 +26,13 @@ class UploadConfirmationDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // ── Fixed header (never scrolls) ─────────────
               Row(
                 children: [
                   Container(
@@ -59,9 +58,15 @@ class UploadConfirmationDialog extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // Rules list
+              // ── Scrollable body ───────────────────────────
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
               _RuleItem(
                 icon: Icons.table_chart_outlined,
                 text:
@@ -100,10 +105,16 @@ class UploadConfirmationDialog extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _buildColumnsTable(),
+                    ],       // end inner Column children
+                  ),         // end inner Column
+                ),           // end SingleChildScrollView
+              ),             // end Flexible
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 12),
 
-              // Action buttons
+              // ── Action buttons (always visible, outside scroll) ──
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -119,20 +130,22 @@ class UploadConfirmationDialog extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
+            ],         // end outer Column children
+          ),           // end outer Column
+        ),             // end Padding
+      ),               // end ConstrainedBox
+    );                 // end Dialog
   }
 
   Widget _buildColumnsTable() {
     const headers = ['#', 'Column Name', 'Type', 'Required'];
     const rows = [
-      ['1', 'code', 'Text', 'Yes'],
-      ['2', 'name', 'Text', 'Yes'],
-      ['3', 'unit', 'Text', 'Yes'],
-      ['4', 'selling_price', 'Number ≥ 0', 'Yes'],
+      ['1', 'code',          'Text',      'No'],
+      ['2', 'name',          'Text',      'Yes'],
+      ['3', 'hindi_name',    'Text',      'No'],
+      ['4', 'group_name',    'Text',      'No'],
+      ['5', 'unit',          'Text',      'Yes'],
+      ['6', 'selling_price', 'Number ≥ 0','Yes'],
     ];
 
     return Container(
@@ -181,12 +194,12 @@ class UploadConfirmationDialog extends StatelessWidget {
                                       color: AppColors.success,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)
-                                  : AppTextStyles.tableCell
-                                      .copyWith(
-                                          fontFamily: i < 2 ||
-                                                  rows[i].indexOf(cell) == 1
-                                              ? 'monospace'
-                                              : null),
+                                  : cell == 'No'
+                                      ? const TextStyle(
+                                          color: AppColors.textDisabled,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500)
+                                      : AppTextStyles.tableCell,
                             ),
                           ),
                         ))

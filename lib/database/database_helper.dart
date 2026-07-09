@@ -84,14 +84,17 @@ class DatabaseHelper {
   }
 
   /// Called when [kDatabaseVersion] is increased.
-  /// Add ALTER TABLE statements here when you change the schema later.
+  /// Each version block is additive — only runs the missing migrations.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Example for a future migration from v1 → v2:
-    // if (oldVersion < 2) {
-    //   await db.execute(
-    //     'ALTER TABLE ${TableNames.items} ADD COLUMN barcode TEXT',
-    //   );
-    // }
+    // v1 → v2: Added hindi_name and group_name to items; code made nullable.
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE ${TableNames.items} ADD COLUMN ${ItemColumns.hindiName} TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${TableNames.items} ADD COLUMN ${ItemColumns.groupName} TEXT',
+      );
+    }
   }
 
   // ── Table creation helpers ───────────────────────────────
@@ -103,8 +106,10 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE ${TableNames.items} (
         ${ItemColumns.id}           INTEGER PRIMARY KEY AUTOINCREMENT,
-        ${ItemColumns.code}         TEXT    NOT NULL UNIQUE,
+        ${ItemColumns.code}         TEXT    UNIQUE,
         ${ItemColumns.name}         TEXT    NOT NULL,
+        ${ItemColumns.hindiName}    TEXT,
+        ${ItemColumns.groupName}    TEXT,
         ${ItemColumns.unit}         TEXT    NOT NULL,
         ${ItemColumns.sellingPrice} REAL    NOT NULL DEFAULT 0
       )
