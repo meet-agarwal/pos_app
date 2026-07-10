@@ -20,7 +20,9 @@ import 'package:flutter/services.dart';
 
 import '../../dao/invoice_dao.dart';
 import '../../database/db_constants.dart';
+import '../../models/item.dart';
 import '../../theme/app_theme.dart';
+import '../billing/models/bill_state.dart';
 
 // ── View model ───────────────────────────────────────────────
 
@@ -114,7 +116,20 @@ class _EditResult {
 // ── Screen ───────────────────────────────────────────────────
 
 class InvoiceHistoryScreen extends StatefulWidget {
-  const InvoiceHistoryScreen({super.key});
+  final Function(
+    int invoiceId,
+    String invoiceNo,
+    String? customerName,
+    String? customerMobile,
+    double discount,
+    String paymentMode,
+    List<BillLineItem> lineItems,
+  )? onEditInvoice;
+
+  const InvoiceHistoryScreen({
+    super.key,
+    this.onEditInvoice,
+  });
 
   @override
   InvoiceHistoryScreenState createState() => InvoiceHistoryScreenState();
@@ -307,49 +322,41 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
   }
 
   Future<void> _handleEdit(_InvoiceRow invoice) async {
-    final result = await showDialog<_EditResult>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _EditInvoiceDialog(invoice: invoice),
-    );
-    if (result == null || !mounted) return;
-    try {
-      await InvoiceDao.instance.updateInvoice(
-        id: invoice.id,
-        paymentMode: result.paymentMode,
-        discount: result.discount,
-        subtotal: invoice.subtotal,
-        paidAmount: result.paidAmount,
-      );
-      final newTotal =
-          (invoice.subtotal - result.discount).clamp(0.0, double.infinity);
-      setState(() {
-        final idx = _invoices.indexWhere((i) => i.id == invoice.id);
-        if (idx >= 0) {
-          _invoices[idx] = invoice.copyWith(
-            paymentMode: result.paymentMode,
-            discount: result.discount,
-            total: newTotal,
-            paidAmount: result.paidAmount,
-          );
-        }
-      });
+    if (widget.onEditInvoice == null) return;
+    
+    // We need the items to populate the Edit screen
+    List<Map<String, dynamic>> items = invoice.items ?? [];
+    if (items.isEmpty) {
+      items = await InvoiceDao.instance.fetchItemsForInvoice(invoice.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Invoice ${invoice.invoiceNo} updated'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Update failed: $e'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        setState(() {
+          invoice.items = items;
+        });
       }
     }
+
+    // Convert raw maps to BillLineItems using a fake/partial Item object
+    // since we only really need id, name, unit, sellingPrice, etc.
+    final lineItems = items.map((m) {
+      return BillLineItem(
+        item: Item(
+          id: m[InvoiceItemColumns.itemId] as int,
+          name: m[InvoiceItemColumns.itemName] as String,
+          unit: m[InvoiceItemColumns.unit] as String,
+          sellingPrice: (m[InvoiceItemColumns.unitPrice] as num).toDouble(),
+        ),
+      )..quantity = (m[InvoiceItemColumns.quantity] as num).toDouble();
+    }).toList();
+
+    widget.onEditInvoice!(
+      invoice.id,
+      invoice.invoiceNo,
+      invoice.customerName,
+      invoice.customerMobile,
+      invoice.discount,
+      invoice.paymentMode,
+      lineItems,
+    );
   }
 
   Future<void> _handleDelete(_InvoiceRow invoice) async {
@@ -693,6 +700,7 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
           Expanded(flex: 3, child: Text('INVOICE NO.', style: AppTextStyles.tableHeader)),
           Expanded(flex: 3, child: Text('CUSTOMER', style: AppTextStyles.tableHeader)),
           Expanded(flex: 2, child: Text('TIME', style: AppTextStyles.tableHeader)),
+          SizedBox(width: 90, child: Text('SUBTOTAL', style: AppTextStyles.tableHeader, textAlign: TextAlign.right)),
           SizedBox(width: 90, child: Text('DISCOUNT', style: AppTextStyles.tableHeader, textAlign: TextAlign.right)),
           SizedBox(width: 100, child: Text('TOTAL', style: AppTextStyles.tableHeader, textAlign: TextAlign.right)),
           SizedBox(width: 80, child: Text('MODE', style: AppTextStyles.tableHeader, textAlign: TextAlign.center)),
@@ -924,6 +932,18 @@ class _SummaryRowState extends State<_SummaryRow> {
                 child: Text(timeStr,
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary)),
+              ),
+              // Subtotal
+              SizedBox(
+                width: 90,
+                child: Text(
+                  '₹${inv.subtotal.toStringAsFixed(2)}',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary),
+                ),
               ),
               // Discount
               SizedBox(

@@ -25,6 +25,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0; // 0 = Billing (default)
 
+  final _billingKey = GlobalKey<BillingScreenState>();
   final _invoiceHistoryKey = GlobalKey<InvoiceHistoryScreenState>();
   final _customersKey = GlobalKey<CustomersScreenState>();
 
@@ -55,9 +56,23 @@ class _AppShellState extends State<AppShell> {
             child: IndexedStack(
               index: _selectedIndex,
               children: [
-                const BillingScreen(),         // index 0
+                BillingScreen(key: _billingKey),         // index 0
                 const ItemsScreen(),           // index 1
-                InvoiceHistoryScreen(key: _invoiceHistoryKey),  // index 2
+                InvoiceHistoryScreen(
+                  key: _invoiceHistoryKey,
+                  onEditInvoice: (invoiceId, invoiceNo, customerName, customerMobile, discount, paymentMode, lineItems) {
+                    _billingKey.currentState?.openEditTab(
+                      invoiceId: invoiceId,
+                      invoiceNo: invoiceNo,
+                      customerName: customerName,
+                      customerMobile: customerMobile,
+                      discount: discount,
+                      paymentMode: paymentMode,
+                      lineItems: lineItems,
+                    );
+                    setState(() => _selectedIndex = 0); // switch to billing tab
+                  },
+                ),  // index 2
                 CustomersScreen(key: _customersKey),       // index 3
                 const ReportsScreen(),         // index 4
                 const SettingsScreen(),        // index 5

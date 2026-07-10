@@ -73,21 +73,35 @@ class CustomerDao {
 
     final db = await _db;
 
-    // If a mobile is provided, try to find an existing record first
+    // If a mobile is provided, it's the primary identifier. Try to find an existing record first.
     if (m.isNotEmpty) {
       final existing = await db.query(
         TableNames.customers,
-        columns: [CustomerColumns.id],
+        columns: [CustomerColumns.id, CustomerColumns.name],
         where: '${CustomerColumns.mobile} = ?',
         whereArgs: [m],
         limit: 1,
       );
+      
       if (existing.isNotEmpty) {
-        return existing.first[CustomerColumns.id] as int;
+        final existingId = existing.first[CustomerColumns.id] as int;
+        final existingName = existing.first[CustomerColumns.name] as String?;
+        
+        // If the user provided a name and it differs from the existing name, update it.
+        if (n.isNotEmpty && n != existingName) {
+          await db.update(
+            TableNames.customers,
+            {CustomerColumns.name: n},
+            where: '${CustomerColumns.id} = ?',
+            whereArgs: [existingId],
+          );
+        }
+        
+        return existingId;
       }
     }
 
-    // Insert a new customer row
+    // Insert a new customer row (either mobile not found, or only name provided)
     final id = await db.insert(
       TableNames.customers,
       {

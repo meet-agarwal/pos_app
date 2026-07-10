@@ -117,4 +117,77 @@ class BillingService {
 
     return savedInvoiceNo;
   }
+
+  // ── Update Bill ───────────────────────────────────────────
+
+  /// Updates an existing bill in place, keeping its invoiceId and invoiceNo.
+  /// 
+  /// Deletes existing invoice_items and bulk inserts the new ones to handle
+  /// additions/removals/modifications easily.
+  Future<void> updateFullBill({
+    required int invoiceId,
+    required String customerName,
+    required String customerMobile,
+    required List<BillLineItem> lineItems,
+    required double subtotal,
+    required double discount,
+    required double total,
+    required String paymentMode,
+    required double paidAmount,
+  }) async {
+    if (lineItems.isEmpty) {
+      throw ArgumentError('Cannot save a bill with no items.');
+    }
+
+    // ── Step 1: resolve customer ──────────────────────────
+    final int? customerId = await CustomerDao.instance.insertOrFetchCustomer(
+      name: customerName,
+      mobile: customerMobile,
+    );
+
+    final db = await DatabaseHelper.instance.database;
+
+    await db.transaction((txn) async {
+      // 1. Update invoice row
+      await txn.update(
+        'invoices',
+        {
+          'customer_id': customerId,
+          'subtotal': subtotal,
+          'discount': discount,
+          'total': total,
+          'payment_mode': paymentMode,
+          'paid_amount': paidAmount,
+        },
+        where: 'id = ?',
+        whereArgs: [invoiceId],
+      );
+
+      // 2. Delete all existing items
+      await txn.delete(
+        'invoice_items',
+        where: 'invoice_id = ?',
+        whereArgs: [invoiceId],
+      );
+
+      // 3. Insert new items
+      final invoiceItems = lineItems.map((li) {
+        return InvoiceItem(
+          invoiceId: invoiceId,
+          itemId: li.item.id!,
+          itemName: li.item.name,
+          unit: li.item.unit,
+          quantity: li.quantity,
+          unitPrice: li.item.sellingPrice,
+          total: li.lineTotal,
+        );
+      }).toList();
+
+      await InvoiceItemDao.instance.insertInvoiceItems(
+        invoiceItems,
+        db: txn,
+      );
+    });
+  }
+
 }

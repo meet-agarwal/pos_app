@@ -36,7 +36,28 @@ class BillWorkspace extends StatefulWidget {
   /// across all tabs for zero-latency search.
   final List<Item> allItems;
 
-  const BillWorkspace({super.key, required this.allItems});
+  /// If provided, the workspace acts in "Edit Mode" for this invoice.
+  final int? editInvoiceId;
+  final String? editInvoiceNo;
+  final String? initialCustomerName;
+  final String? initialCustomerMobile;
+  final double? initialDiscount;
+  final String? initialPaymentMode;
+  final List<BillLineItem>? initialLineItems;
+  final VoidCallback? onEditComplete;
+
+  const BillWorkspace({
+    super.key,
+    required this.allItems,
+    this.editInvoiceId,
+    this.editInvoiceNo,
+    this.initialCustomerName,
+    this.initialCustomerMobile,
+    this.initialDiscount,
+    this.initialPaymentMode,
+    this.initialLineItems,
+    this.onEditComplete,
+  });
 
   @override
   State<BillWorkspace> createState() => BillWorkspaceState();
@@ -77,12 +98,34 @@ class BillWorkspaceState extends State<BillWorkspace> {
       _mobileCtrl.text.isNotEmpty ||
       _discount > 0;
 
+  bool get isEditMode => widget.editInvoiceId != null;
+
   // ── Lifecycle ─────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _discountCtrl.addListener(_onDiscountChanged);
+    
+    // Pre-populate if editing
+    if (isEditMode) {
+      if (widget.initialCustomerName != null) {
+        _nameCtrl.text = widget.initialCustomerName!;
+      }
+      if (widget.initialCustomerMobile != null) {
+        _mobileCtrl.text = widget.initialCustomerMobile!;
+      }
+      if (widget.initialDiscount != null) {
+        _discount = widget.initialDiscount!;
+        _discountCtrl.text = _discount > 0 ? _discount.toStringAsFixed(2) : '';
+      }
+      if (widget.initialPaymentMode != null) {
+        _paymentMode = widget.initialPaymentMode!;
+      }
+      if (widget.initialLineItems != null) {
+        _lineItems.addAll(widget.initialLineItems!);
+      }
+    }
   }
 
   @override
@@ -148,23 +191,40 @@ class BillWorkspaceState extends State<BillWorkspace> {
     setState(() => _isSaving = true);
 
     try {
-      final invoiceNo = await BillingService.instance.saveBill(
-        customerName: _nameCtrl.text,
-        customerMobile: _mobileCtrl.text,
-        lineItems: _lineItems,
-        subtotal: _subtotal,
-        discount: _discount,
-        total: _total,
-        paymentMode: _paymentMode,
-        paidAmount: _total, // default: fully paid
-      );
+      if (isEditMode) {
+        await BillingService.instance.updateFullBill(
+          invoiceId: widget.editInvoiceId!,
+          customerName: _nameCtrl.text,
+          customerMobile: _mobileCtrl.text,
+          lineItems: _lineItems,
+          subtotal: _subtotal,
+          discount: _discount,
+          total: _total,
+          paymentMode: _paymentMode,
+          paidAmount: _total, // default: fully paid
+        );
+        if (!mounted) return;
+        _showSnackBar('Invoice ${widget.editInvoiceNo} updated successfully ✓');
+        widget.onEditComplete?.call();
+      } else {
+        final invoiceNo = await BillingService.instance.saveBill(
+          customerName: _nameCtrl.text,
+          customerMobile: _mobileCtrl.text,
+          lineItems: _lineItems,
+          subtotal: _subtotal,
+          discount: _discount,
+          total: _total,
+          paymentMode: _paymentMode,
+          paidAmount: _total, // default: fully paid
+        );
 
-      if (!mounted) return;
+        if (!mounted) return;
+        _showSnackBar('Invoice $invoiceNo saved successfully ✓');
+        _resetWorkspace();
+      }
 
       // TODO (future): trigger print if andPrint == true
 
-      _showSnackBar('Invoice $invoiceNo saved successfully ✓');
-      _resetWorkspace();
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Failed to save invoice: $e', isError: true);

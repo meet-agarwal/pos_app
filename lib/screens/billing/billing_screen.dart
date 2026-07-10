@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import '../../dao/item_dao.dart';
 import '../../models/item.dart';
 import '../../theme/app_theme.dart';
+import 'models/bill_state.dart';
 import 'widgets/bill_tab_bar.dart';
 import 'widgets/bill_workspace.dart';
 
@@ -26,7 +27,27 @@ import 'widgets/bill_workspace.dart';
 class _BillTab {
   final int id;
   final String label;
-  const _BillTab({required this.id, required this.label});
+  
+  // Optional edit data
+  final int? editInvoiceId;
+  final String? editInvoiceNo;
+  final String? initialCustomerName;
+  final String? initialCustomerMobile;
+  final double? initialDiscount;
+  final String? initialPaymentMode;
+  final List<BillLineItem>? initialLineItems;
+
+  const _BillTab({
+    required this.id,
+    required this.label,
+    this.editInvoiceId,
+    this.editInvoiceNo,
+    this.initialCustomerName,
+    this.initialCustomerMobile,
+    this.initialDiscount,
+    this.initialPaymentMode,
+    this.initialLineItems,
+  });
 }
 
 // ── Screen ───────────────────────────────────────────────────
@@ -35,10 +56,10 @@ class BillingScreen extends StatefulWidget {
   const BillingScreen({super.key});
 
   @override
-  State<BillingScreen> createState() => _BillingScreenState();
+  State<BillingScreen> createState() => BillingScreenState();
 }
 
-class _BillingScreenState extends State<BillingScreen> {
+class BillingScreenState extends State<BillingScreen> {
   // ── Tab state ─────────────────────────────────────────────
   List<_BillTab> _tabs = [];
   int _activeIndex = 0;
@@ -99,6 +120,35 @@ class _BillingScreenState extends State<BillingScreen> {
     });
   }
 
+  void openEditTab({
+    required int invoiceId,
+    required String invoiceNo,
+    String? customerName,
+    String? customerMobile,
+    required double discount,
+    required String paymentMode,
+    required List<BillLineItem> lineItems,
+  }) {
+    setState(() {
+      final id = _nextId++;
+      _tabs = [
+        ..._tabs,
+        _BillTab(
+          id: id,
+          label: 'Edit $invoiceNo',
+          editInvoiceId: invoiceId,
+          editInvoiceNo: invoiceNo,
+          initialCustomerName: customerName,
+          initialCustomerMobile: customerMobile,
+          initialDiscount: discount,
+          initialPaymentMode: paymentMode,
+          initialLineItems: lineItems,
+        ),
+      ];
+      _activeIndex = _tabs.length - 1;
+    });
+  }
+
   // ── Build ─────────────────────────────────────────────────
 
   @override
@@ -140,6 +190,17 @@ class _BillingScreenState extends State<BillingScreen> {
                         (tab) => BillWorkspace(
                           key: ValueKey(tab.id),
                           allItems: _allItems,
+                          editInvoiceId: tab.editInvoiceId,
+                          editInvoiceNo: tab.editInvoiceNo,
+                          initialCustomerName: tab.initialCustomerName,
+                          initialCustomerMobile: tab.initialCustomerMobile,
+                          initialDiscount: tab.initialDiscount,
+                          initialPaymentMode: tab.initialPaymentMode,
+                          initialLineItems: tab.initialLineItems,
+                          onEditComplete: () {
+                            final idx = _tabs.indexOf(tab);
+                            if (idx >= 0) _closeTab(idx);
+                          },
                         ),
                       )
                       .toList(),
@@ -150,13 +211,16 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Widget _buildHeader() {
+    final activeTab = _tabs.isNotEmpty ? _tabs[_activeIndex] : null;
+    final title = (activeTab?.editInvoiceId != null) ? 'Edit Invoice' : 'Billing';
+
     return Container(
       height: 64,
       color: AppColors.screenHeaderBg,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          const Text('Billing', style: AppTextStyles.screenTitle),
+          Text(title, style: AppTextStyles.screenTitle),
           const Spacer(),
           // Show how many items are loaded (helpful for debugging)
           if (_itemsLoaded && _allItems.isNotEmpty)
