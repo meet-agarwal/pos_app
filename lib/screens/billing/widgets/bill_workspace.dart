@@ -188,6 +188,16 @@ class BillWorkspaceState extends State<BillWorkspace> {
       return;
     }
 
+    // Validation — mobile number must be exactly 10 digits if provided
+    final mobile = _mobileCtrl.text.trim();
+    if (mobile.isNotEmpty && mobile.length != 10) {
+      _showSnackBar(
+        'Mobile number must be exactly 10 digits.',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {

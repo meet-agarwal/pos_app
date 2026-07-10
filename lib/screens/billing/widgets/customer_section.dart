@@ -10,6 +10,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../dao/customer_dao.dart';
 import '../../../models/customer.dart';
@@ -228,6 +229,10 @@ class _CustomerSectionState extends State<CustomerSection> {
           focusNode: _mobileFocus,
           onChanged: _onMobileChanged,
           keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
           decoration: const InputDecoration(
             hintText: 'Mobile number (optional)',
             isDense: true,

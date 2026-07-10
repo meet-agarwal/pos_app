@@ -12,6 +12,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../dao/customer_dao.dart';
@@ -723,6 +724,11 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
           _fieldError = 'Please provide at least a name or phone number.');
       return;
     }
+    if (mobile.isNotEmpty && mobile.length != 10) {
+      setState(() =>
+          _fieldError = 'Mobile number must be exactly 10 digits.');
+      return;
+    }
     setState(() { _saving = true; _fieldError = null; });
     try {
       final customer = Customer(
@@ -809,6 +815,10 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
             TextField(
               controller: _mobileCtrl,
               keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'e.g. 9876543210',
