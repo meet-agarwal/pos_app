@@ -98,4 +98,59 @@ class CustomerDao {
     );
     return id;
   }
+
+  // ── PAGINATED READ ────────────────────────────────────────
+
+  /// Returns one page of customers, optionally filtered by [search]
+  /// (matches name or mobile, case-insensitive).
+  Future<List<Customer>> getAllCustomers({
+    int page = 0,
+    int pageSize = 20,
+    String search = '',
+  }) async {
+    final db = await _db;
+    final q = search.trim().toLowerCase();
+    String where = '';
+    List<dynamic> args = [];
+    if (q.isNotEmpty) {
+      where =
+          'WHERE LOWER(${CustomerColumns.name}) LIKE ? OR ${CustomerColumns.mobile} LIKE ?';
+      args = ['%$q%', '%$q%'];
+    }
+    final rows = await db.rawQuery(
+      'SELECT * FROM ${TableNames.customers} $where '
+      'ORDER BY ${CustomerColumns.name} ASC '
+      'LIMIT ? OFFSET ?',
+      [...args, pageSize, page * pageSize],
+    );
+    return rows.map(Customer.fromMap).toList();
+  }
+
+  /// Returns the total count of customers matching [search].
+  Future<int> getCustomerCount({String search = ''}) async {
+    final db = await _db;
+    final q = search.trim().toLowerCase();
+    String where = '';
+    List<dynamic> args = [];
+    if (q.isNotEmpty) {
+      where =
+          'WHERE LOWER(${CustomerColumns.name}) LIKE ? OR ${CustomerColumns.mobile} LIKE ?';
+      args = ['%$q%', '%$q%'];
+    }
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM ${TableNames.customers} $where',
+      args,
+    );
+    return (result.first['cnt'] as int?) ?? 0;
+  }
+
+  /// Inserts a new customer and returns the auto-generated row id.
+  Future<int> insertCustomer(Customer customer) async {
+    final db = await _db;
+    return db.insert(
+      TableNames.customers,
+      customer.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.abort,
+    );
+  }
 }

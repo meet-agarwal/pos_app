@@ -25,6 +25,18 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0; // 0 = Billing (default)
 
+  final _invoiceHistoryKey = GlobalKey<InvoiceHistoryScreenState>();
+  final _customersKey = GlobalKey<CustomersScreenState>();
+
+  void _onTabSelected(int index) {
+    setState(() => _selectedIndex = index);
+    if (index == 2) {
+      _invoiceHistoryKey.currentState?.refresh();
+    } else if (index == 3) {
+      _customersKey.currentState?.refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,9 +45,7 @@ class _AppShellState extends State<AppShell> {
           // ── Sidebar ─────────────────────────────────────────
           AppSidebar(
             selectedIndex: _selectedIndex,
-            onItemSelected: (index) {
-              setState(() => _selectedIndex = index);
-            },
+            onItemSelected: _onTabSelected,
           ),
 
           // ── Main content ────────────────────────────────────
@@ -44,13 +54,13 @@ class _AppShellState extends State<AppShell> {
           Expanded(
             child: IndexedStack(
               index: _selectedIndex,
-              children: const [
-                BillingScreen(),         // index 0
-                ItemsScreen(),           // index 1
-                InvoiceHistoryScreen(),  // index 2
-                CustomersScreen(),       // index 3
-                ReportsScreen(),         // index 4
-                SettingsScreen(),        // index 5
+              children: [
+                const BillingScreen(),         // index 0
+                const ItemsScreen(),           // index 1
+                InvoiceHistoryScreen(key: _invoiceHistoryKey),  // index 2
+                CustomersScreen(key: _customersKey),       // index 3
+                const ReportsScreen(),         // index 4
+                const SettingsScreen(),        // index 5
               ],
             ),
           ),
@@ -59,3 +69,4 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
+

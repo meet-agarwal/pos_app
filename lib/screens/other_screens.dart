@@ -1,27 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
+import '../theme/app_theme.dart';
+import 'invoice_history/invoice_history_screen.dart';
 
-class InvoiceHistoryScreen extends StatelessWidget {
-  const InvoiceHistoryScreen({super.key});
-  @override
-  Widget build(BuildContext context) => _PlaceholderContent(
-        icon: Icons.history_outlined,
-        title: 'Invoice History',
-        subtitle: 'Browse and search past invoices',
-        color: const Color(0xFF7C4DFF),
-      );
-}
-
-class CustomersScreen extends StatelessWidget {
-  const CustomersScreen({super.key});
-  @override
-  Widget build(BuildContext context) => _PlaceholderContent(
-        icon: Icons.people_outline,
-        title: 'Customers',
-        subtitle: 'Manage your customer database',
-        color: const Color(0xFF00BFA5),
-      );
-}
+export 'invoice_history/invoice_history_screen.dart';
+export 'customers/customers_screen.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});

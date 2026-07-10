@@ -66,21 +66,18 @@ class InvoiceDao {
     return '$prefix$seq';
   }
 
-  // ── READ ──────────────────────────────────────────────────
+  // ── READ — DATE RANGE ────────────────────────────────────
 
-  /// Returns all invoices for [date] joined with customer name.
-  /// Optionally filtered by [search] — matches invoice_no OR customer name.
-  Future<List<Map<String, dynamic>>> fetchByDate(
-    DateTime date, {
+  /// Returns invoices within [start]..[end] (inclusive) joined with customer.
+  /// Optionally filtered by [search] on invoice_no, customer name or mobile.
+  Future<List<Map<String, dynamic>>> fetchByDateRange(
+    DateTime start,
+    DateTime end, {
     String search = '',
   }) async {
     final db = await _db;
-
-    final datePart =
-        '${(date.year % 100).toString().padLeft(2, '0')}'
-        '${date.month.toString().padLeft(2, '0')}'
-        '${date.day.toString().padLeft(2, '0')}';
-    final prefix = 'INV/$datePart/%';
+    final startStr = _fmtDate(start);
+    final endStr = _fmtDate(end);
     final q = search.trim().toLowerCase();
 
     final rows = await db.rawQuery(
@@ -100,12 +97,15 @@ class InvoiceDao {
       FROM ${TableNames.invoices} i
       LEFT JOIN ${TableNames.customers} c
         ON i.${InvoiceColumns.customerId} = c.${CustomerColumns.id}
-      WHERE i.${InvoiceColumns.invoiceNo} LIKE ?
-        ${q.isEmpty ? '' : "AND (LOWER(i.${InvoiceColumns.invoiceNo}) LIKE ? OR LOWER(COALESCE(c.${CustomerColumns.name},'')) LIKE ?)"}
+      WHERE date(i.${InvoiceColumns.dateTime}) >= ?
+        AND date(i.${InvoiceColumns.dateTime}) <= ?
+        ${q.isEmpty ? '' : "AND (LOWER(i.${InvoiceColumns.invoiceNo}) LIKE ? OR LOWER(COALESCE(c.${CustomerColumns.name},'')) LIKE ? OR LOWER(COALESCE(c.${CustomerColumns.mobile},'')) LIKE ?)"}
       ORDER BY i.${InvoiceColumns.id} DESC
       ''',
       [
-        prefix,
+        startStr,
+        endStr,
+        if (q.isNotEmpty) '%$q%',
         if (q.isNotEmpty) '%$q%',
         if (q.isNotEmpty) '%$q%',
       ],
@@ -124,5 +124,55 @@ class InvoiceDao {
       orderBy: InvoiceItemColumns.id,
     );
   }
-}
 
+  // ── UPDATE ────────────────────────────────────────────────
+
+  /// Patches payment_mode, discount, total (recalculated), and paid_amount.
+  Future<void> updateInvoice({
+    required int id,
+    required String paymentMode,
+    required double discount,
+    required double subtotal,
+    required double paidAmount,
+  }) async {
+    final total = (subtotal - discount).clamp(0.0, double.infinity);
+    final db = await _db;
+    await db.update(
+      TableNames.invoices,
+      {
+        InvoiceColumns.paymentMode: paymentMode,
+        InvoiceColumns.discount: discount,
+        InvoiceColumns.total: total,
+        InvoiceColumns.paidAmount: paidAmount,
+      },
+      where: '${InvoiceColumns.id} = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ── DELETE ────────────────────────────────────────────────
+
+  /// Deletes the invoice and all its line items inside a single transaction.
+  Future<void> deleteInvoice(int id) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.delete(
+        TableNames.invoiceItems,
+        where: '${InvoiceItemColumns.invoiceId} = ?',
+        whereArgs: [id],
+      );
+      await txn.delete(
+        TableNames.invoices,
+        where: '${InvoiceColumns.id} = ?',
+        whereArgs: [id],
+      );
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────
+
+  /// Formats [d] as `YYYY-MM-DD` for SQLite `date()` comparisons.
+  static String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+}
