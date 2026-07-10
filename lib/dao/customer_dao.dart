@@ -189,4 +189,19 @@ class CustomerDao {
       whereArgs: [id],
     );
   }
+
+  /// Fetches a single customer by their ID. Returns null if not found.
+  Future<Customer?> getCustomerById(int id) async {
+    final db = await _db;
+    final rows = await db.query(
+      TableNames.customers,
+      where: '${CustomerColumns.id} = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      return Customer.fromMap(rows.first);
+    }
+    return null;
+  }
 }

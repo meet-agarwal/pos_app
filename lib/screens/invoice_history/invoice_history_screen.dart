@@ -18,6 +18,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../dao/customer_dao.dart';
 import '../../dao/invoice_dao.dart';
 import '../../database/db_constants.dart';
 import '../../models/item.dart';
@@ -29,6 +30,7 @@ import '../billing/models/bill_state.dart';
 class _InvoiceRow {
   final int id;
   final String invoiceNo;
+  final int? customerId;
   final String? customerName;
   final String? customerMobile;
   final double subtotal;
@@ -42,6 +44,7 @@ class _InvoiceRow {
   _InvoiceRow({
     required this.id,
     required this.invoiceNo,
+    this.customerId,
     this.customerName,
     this.customerMobile,
     required this.subtotal,
@@ -56,6 +59,7 @@ class _InvoiceRow {
     return _InvoiceRow(
       id: m[InvoiceColumns.id] as int,
       invoiceNo: m[InvoiceColumns.invoiceNo] as String,
+      customerId: m[InvoiceColumns.customerId] as int?,
       customerName: m['customer_name'] as String?,
       customerMobile: m['customer_mobile'] as String?,
       subtotal: (m[InvoiceColumns.subtotal] as num).toDouble(),
@@ -76,6 +80,7 @@ class _InvoiceRow {
     return _InvoiceRow(
       id: id,
       invoiceNo: invoiceNo,
+      customerId: customerId,
       customerName: customerName,
       customerMobile: customerMobile,
       subtotal: subtotal,
@@ -281,6 +286,8 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 8,
       items: [
+        if (invoice.customerId != null)
+          _menuItem('customer', Icons.person_outline, 'View Customer Details'),
         _menuItem('edit', Icons.edit_outlined, 'Edit'),
         _menuItem('delete', Icons.delete_outline, 'Delete',
             color: AppColors.error),
@@ -291,6 +298,8 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
     );
     if (!mounted) return;
     switch (result) {
+      case 'customer':
+        await _showCustomerDetails(invoice.customerId!);
       case 'edit':
         await _handleEdit(invoice);
       case 'delete':
@@ -316,6 +325,45 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: color)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCustomerDetails(int customerId) async {
+    final customer = await CustomerDao.instance.getCustomerById(customerId);
+    if (!mounted || customer == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+        title: const Text('Customer Details',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DetailRow('Name', customer.name.isNotEmpty ? customer.name : '—'),
+              const SizedBox(height: 12),
+              _DetailRow('Mobile', customer.mobile.isNotEmpty ? customer.mobile : '—'),
+              const SizedBox(height: 12),
+              _DetailRow('Outstanding Debt', '₹${customer.debt.toStringAsFixed(2)}', isDebt: customer.debt > 0),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -1564,6 +1612,33 @@ class _IconBtnState extends State<_IconBtn> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDebt;
+  const _DetailRow(this.label, this.value, {this.isDebt = false});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        ),
+        Expanded(
+          child: Text(value, style: TextStyle(
+            fontSize: 13, 
+            fontWeight: FontWeight.w600, 
+            color: isDebt ? AppColors.warning : AppColors.textPrimary,
+          )),
+        ),
+      ],
     );
   }
 }
