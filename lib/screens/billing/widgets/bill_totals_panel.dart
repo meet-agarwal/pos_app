@@ -15,6 +15,8 @@ class BillTotalsPanel extends StatelessWidget {
   final double discount;
   final double total;
   final TextEditingController discountCtrl;
+  final String paymentMode;
+  final ValueChanged<String> onPaymentModeChanged;
 
   const BillTotalsPanel({
     super.key,
@@ -22,6 +24,8 @@ class BillTotalsPanel extends StatelessWidget {
     required this.discount,
     required this.total,
     required this.discountCtrl,
+    required this.paymentMode,
+    required this.onPaymentModeChanged,
   });
 
   @override
@@ -66,6 +70,8 @@ class BillTotalsPanel extends StatelessWidget {
                   child: Divider(height: 1),
                 ),
                 _buildTotalRow(),
+                const SizedBox(height: 14),
+                _buildPaymentModeSelector(),
               ],
             ),
           ),
@@ -192,4 +198,64 @@ class BillTotalsPanel extends StatelessWidget {
   }
 
   String _rupees(double v) => '₹${v.toStringAsFixed(2)}';
+
+  // ── Payment Mode Selector ─────────────────────────────────
+
+  static const _modes = ['Cash', 'Card', 'Credit'];
+
+  Widget _buildPaymentModeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'PAYMENT MODE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: _modes.map((mode) {
+            final selected = mode == paymentMode;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onPaymentModeChanged(mode),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  margin: EdgeInsets.only(
+                    right: mode != _modes.last ? 6 : 0,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.tableBorder,
+                      width: selected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    mode,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
 }

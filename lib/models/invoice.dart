@@ -12,7 +12,7 @@ import '../database/db_constants.dart';
 class Invoice {
   final int? id;
   final String invoiceNo;
-  final int customerId;       // FK → customers.id
+  final int? customerId;      // FK → customers.id  (null = anonymous walk-in)
   final DateTime dateTime;
   final double subtotal;
   final double discount;
@@ -23,7 +23,7 @@ class Invoice {
   const Invoice({
     this.id,
     required this.invoiceNo,
-    required this.customerId,
+    this.customerId,
     required this.dateTime,
     required this.subtotal,
     this.discount = 0.0,
@@ -37,7 +37,7 @@ class Invoice {
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
       InvoiceColumns.invoiceNo: invoiceNo,
-      InvoiceColumns.customerId: customerId,
+      if (customerId != null) InvoiceColumns.customerId: customerId,
       // Store as ISO-8601 string for portability
       InvoiceColumns.dateTime: dateTime.toIso8601String(),
       InvoiceColumns.subtotal: subtotal,
@@ -54,7 +54,7 @@ class Invoice {
     return Invoice(
       id: map[InvoiceColumns.id] as int?,
       invoiceNo: map[InvoiceColumns.invoiceNo] as String,
-      customerId: map[InvoiceColumns.customerId] as int,
+      customerId: map[InvoiceColumns.customerId] as int?,
       dateTime: DateTime.parse(map[InvoiceColumns.dateTime] as String),
       subtotal: (map[InvoiceColumns.subtotal] as num).toDouble(),
       discount: (map[InvoiceColumns.discount] as num).toDouble(),
@@ -66,10 +66,13 @@ class Invoice {
 
   // ── Utility ──────────────────────────────────────────────
 
+  // Sentinel so copyWith can distinguish "pass null" from "not provided".
+  static const Object _sentinel = Object();
+
   Invoice copyWith({
     int? id,
     String? invoiceNo,
-    int? customerId,
+    Object? customerId = _sentinel,
     DateTime? dateTime,
     double? subtotal,
     double? discount,
@@ -80,7 +83,9 @@ class Invoice {
     return Invoice(
       id: id ?? this.id,
       invoiceNo: invoiceNo ?? this.invoiceNo,
-      customerId: customerId ?? this.customerId,
+      customerId: customerId == _sentinel
+          ? this.customerId
+          : customerId as int?,
       dateTime: dateTime ?? this.dateTime,
       subtotal: subtotal ?? this.subtotal,
       discount: discount ?? this.discount,
@@ -95,3 +100,4 @@ class Invoice {
       'Invoice(id: $id, invoiceNo: $invoiceNo, customerId: $customerId, '
       'total: $total, paymentMode: $paymentMode)';
 }
+

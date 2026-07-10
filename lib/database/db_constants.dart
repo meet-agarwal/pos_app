@@ -15,7 +15,7 @@
 const String kDatabaseName = 'pos_database.db';
 
 /// Current schema version.  Bump this when you add/alter tables.
-const int kDatabaseVersion = 2;
+const int kDatabaseVersion = 3;
 
 // ── Table Names ─────────────────────────────────────────────
 

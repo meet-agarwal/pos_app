@@ -95,7 +95,35 @@ class DatabaseHelper {
         'ALTER TABLE ${TableNames.items} ADD COLUMN ${ItemColumns.groupName} TEXT',
       );
     }
+
+    // v2 → v3: Make customer_id nullable in invoices.
+    // SQLite cannot ALTER COLUMN, so we recreate the table.
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE invoices_new (
+          ${InvoiceColumns.id}          INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${InvoiceColumns.invoiceNo}   TEXT    NOT NULL UNIQUE,
+          ${InvoiceColumns.customerId}  INTEGER,
+          ${InvoiceColumns.dateTime}    TEXT    NOT NULL,
+          ${InvoiceColumns.subtotal}    REAL    NOT NULL DEFAULT 0,
+          ${InvoiceColumns.discount}    REAL    NOT NULL DEFAULT 0,
+          ${InvoiceColumns.total}       REAL    NOT NULL DEFAULT 0,
+          ${InvoiceColumns.paymentMode} TEXT    NOT NULL,
+          ${InvoiceColumns.paidAmount}  REAL    NOT NULL DEFAULT 0,
+          FOREIGN KEY (${InvoiceColumns.customerId})
+            REFERENCES ${TableNames.customers} (${CustomerColumns.id})
+        )
+      ''');
+      await db.execute(
+        'INSERT INTO invoices_new SELECT * FROM ${TableNames.invoices}',
+      );
+      await db.execute('DROP TABLE ${TableNames.invoices}');
+      await db.execute(
+        'ALTER TABLE invoices_new RENAME TO ${TableNames.invoices}',
+      );
+    }
   }
+
 
   // ── Table creation helpers ───────────────────────────────
   // Each table gets its own private method so that _onCreate stays clean
@@ -134,7 +162,7 @@ class DatabaseHelper {
       CREATE TABLE ${TableNames.invoices} (
         ${InvoiceColumns.id}          INTEGER PRIMARY KEY AUTOINCREMENT,
         ${InvoiceColumns.invoiceNo}   TEXT    NOT NULL UNIQUE,
-        ${InvoiceColumns.customerId}  INTEGER NOT NULL,
+        ${InvoiceColumns.customerId}  INTEGER,
         ${InvoiceColumns.dateTime}    TEXT    NOT NULL,
         ${InvoiceColumns.subtotal}    REAL    NOT NULL DEFAULT 0,
         ${InvoiceColumns.discount}    REAL    NOT NULL DEFAULT 0,

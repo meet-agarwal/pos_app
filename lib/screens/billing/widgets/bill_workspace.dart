@@ -20,7 +20,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../models/customer.dart';
 import '../../../models/item.dart';
+import '../../../services/billing_service.dart';
 import '../../../theme/app_theme.dart';
 import '../models/bill_state.dart';
 import 'action_buttons.dart';
@@ -44,7 +46,10 @@ class BillWorkspaceState extends State<BillWorkspace> {
   // ── Customer ──────────────────────────────────────────────
   final _nameCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
-  // _linkedCustomer will be stored here when Save is implemented
+
+  /// Set when the user picks a record from the autocomplete dropdown.
+  /// Cleared back to null if either field is manually edited afterward.
+  Customer? _linkedCustomer;
 
   // ── Items ─────────────────────────────────────────────────
   final List<BillLineItem> _lineItems = [];
@@ -52,6 +57,12 @@ class BillWorkspaceState extends State<BillWorkspace> {
   // ── Discount ──────────────────────────────────────────────
   final _discountCtrl = TextEditingController();
   double _discount = 0.0;
+
+  // ── Payment mode ──────────────────────────────────────────
+  String _paymentMode = 'Cash';
+
+  // ── Save state ────────────────────────────────────────────
+  bool _isSaving = false;
 
   // ── Computed ─────────────────────────────────────────────
   double get _subtotal =>
@@ -91,6 +102,10 @@ class BillWorkspaceState extends State<BillWorkspace> {
     if (clamped != _discount) setState(() => _discount = clamped);
   }
 
+  void _onCustomerSelected(Customer? c) {
+    setState(() => _linkedCustomer = c);
+  }
+
   void _addItem(Item item) {
     setState(() {
       // Increment quantity if item already present
@@ -115,6 +130,73 @@ class BillWorkspaceState extends State<BillWorkspace> {
     setState(() => _lineItems.removeAt(index));
   }
 
+  // ── Save ──────────────────────────────────────────────────
+
+  /// Validates and persists the bill.
+  /// [andPrint] = true when triggered from "Print & Save" (printing
+  /// is a stub for now — will be implemented separately).
+  Future<void> _saveBill({bool andPrint = false}) async {
+    // Validation — must have at least one item
+    if (_lineItems.isEmpty) {
+      _showSnackBar(
+        'Add at least one item before saving.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final invoiceNo = await BillingService.instance.saveBill(
+        customerName: _nameCtrl.text,
+        customerMobile: _mobileCtrl.text,
+        lineItems: _lineItems,
+        subtotal: _subtotal,
+        discount: _discount,
+        total: _total,
+        paymentMode: _paymentMode,
+        paidAmount: _total, // default: fully paid
+      );
+
+      if (!mounted) return;
+
+      // TODO (future): trigger print if andPrint == true
+
+      _showSnackBar('Invoice $invoiceNo saved successfully ✓');
+      _resetWorkspace();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Failed to save invoice: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// Clears all fields to start a fresh bill.
+  void _resetWorkspace() {
+    setState(() {
+      _lineItems.clear();
+      _discount = 0.0;
+      _paymentMode = 'Cash';
+      _linkedCustomer = null;
+    });
+    _nameCtrl.clear();
+    _mobileCtrl.clear();
+    _discountCtrl.clear();
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 4 : 3),
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────
 
   @override
@@ -130,8 +212,7 @@ class BillWorkspaceState extends State<BillWorkspace> {
             CustomerSection(
               nameCtrl: _nameCtrl,
               mobileCtrl: _mobileCtrl,
-              onCustomerSelected: (_) {},
-              // Customer reference will be used when Save is implemented
+              onCustomerSelected: _onCustomerSelected,
             ),
             const SizedBox(height: 10),
 
@@ -169,6 +250,9 @@ class BillWorkspaceState extends State<BillWorkspace> {
                           discount: _discount,
                           total: _total,
                           discountCtrl: _discountCtrl,
+                          paymentMode: _paymentMode,
+                          onPaymentModeChanged: (mode) =>
+                              setState(() => _paymentMode = mode),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -178,7 +262,11 @@ class BillWorkspaceState extends State<BillWorkspace> {
                             border:
                                 Border.all(color: AppColors.tableBorder),
                           ),
-                          child: const ActionButtons(),
+                          child: ActionButtons(
+                            isSaving: _isSaving,
+                            onSave: () => _saveBill(),
+                            onSaveAndPrint: () => _saveBill(andPrint: true),
+                          ),
                         ),
                       ],
                     ),
