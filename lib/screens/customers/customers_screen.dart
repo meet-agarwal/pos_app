@@ -326,6 +326,7 @@ class CustomersScreenState extends State<CustomersScreen> {
                 index: _startIdx + i,
                 customer: _customers[i],
                 isEven: i.isEven,
+                onContextMenu: (pos) => _showContextMenu(pos, _customers[i]),
               ),
             ),
           ),
@@ -417,6 +418,119 @@ class CustomersScreenState extends State<CustomersScreen> {
       ),
     );
   }
+
+  // ── Context Menu ──────────────────────────────────────────
+
+  Future<void> _showContextMenu(Offset position, Customer customer) async {
+    final size = MediaQuery.of(context).size;
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        size.width - position.dx,
+        size.height - position.dy,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      elevation: 8,
+      items: [
+        _menuItem('edit', Icons.edit_outlined, 'Edit'),
+        _menuItem('delete', Icons.delete_outline, 'Delete', color: AppColors.error),
+      ],
+    );
+    if (!mounted) return;
+    if (result == 'edit') {
+      await _handleEdit(customer);
+    } else if (result == 'delete') {
+      await _handleDelete(customer);
+    }
+  }
+
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label,
+      {Color color = AppColors.textPrimary}) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: color)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleEdit(Customer customer) async {
+    final edited = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AddCustomerDialog(customer: customer),
+    );
+    if (edited == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Customer ${customer.name} updated'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+      _loadPage();
+    }
+  }
+
+  Future<void> _handleDelete(Customer customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Customer?',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
+        content: Text(
+          'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await CustomerDao.instance.deleteCustomer(customer.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Customer ${customer.name} deleted'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+      _loadPage();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Delete failed: $e'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
 }
 
 // ── Customer row ─────────────────────────────────────────────
@@ -425,11 +539,13 @@ class _CustomerRow extends StatefulWidget {
   final int index;
   final Customer customer;
   final bool isEven;
+  final ValueChanged<Offset>? onContextMenu;
 
   const _CustomerRow({
     required this.index,
     required this.customer,
     required this.isEven,
+    this.onContextMenu,
   });
 
   @override
@@ -447,7 +563,10 @@ class _CustomerRowState extends State<_CustomerRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
+      child: GestureDetector(
+        onSecondaryTapUp: (d) => widget.onContextMenu?.call(d.globalPosition),
+        onLongPressStart: (d) => widget.onContextMenu?.call(d.globalPosition),
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         margin: const EdgeInsets.only(bottom: 3),
         padding:
@@ -546,6 +665,7 @@ class _CustomerRowState extends State<_CustomerRow> {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -559,7 +679,9 @@ class _CustomerRowState extends State<_CustomerRow> {
 // ── Add Customer dialog ───────────────────────────────────────
 
 class _AddCustomerDialog extends StatefulWidget {
-  const _AddCustomerDialog();
+  final Customer? customer;
+
+  const _AddCustomerDialog({this.customer});
 
   @override
   State<_AddCustomerDialog> createState() => _AddCustomerDialogState();
@@ -571,6 +693,18 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
   final _debtCtrl = TextEditingController();
   bool _saving = false;
   String? _fieldError;
+
+  bool get _isEdit => widget.customer != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEdit) {
+      _nameCtrl.text = widget.customer!.name;
+      _mobileCtrl.text = widget.customer!.mobile;
+      _debtCtrl.text = widget.customer!.debt > 0 ? widget.customer!.debt.toStringAsFixed(2) : '';
+    }
+  }
 
   @override
   void dispose() {
@@ -592,11 +726,16 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
     setState(() { _saving = true; _fieldError = null; });
     try {
       final customer = Customer(
+        id: widget.customer?.id,
         name: name,
         mobile: mobile,
         debt: double.tryParse(_debtCtrl.text.trim()) ?? 0.0,
       );
-      await CustomerDao.instance.insertCustomer(customer);
+      if (_isEdit) {
+        await CustomerDao.instance.updateCustomer(customer);
+      } else {
+        await CustomerDao.instance.insertCustomer(customer);
+      }
       if (mounted) Navigator.pop(context, true);
     } on DatabaseException catch (e) {
       if (mounted) {
@@ -621,8 +760,8 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      title: const Text('Add New Customer',
-          style: TextStyle(
+      title: Text(_isEdit ? 'Edit Customer' : 'Add New Customer',
+          style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary)),
@@ -716,7 +855,7 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
                   height: 16,
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Colors.white))
-              : const Text('Add Customer'),
+              : Text(_isEdit ? 'Save Changes' : 'Add Customer'),
         ),
       ],
     );

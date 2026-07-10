@@ -167,4 +167,26 @@ class CustomerDao {
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
+
+  /// Updates an existing customer.
+  Future<void> updateCustomer(Customer customer) async {
+    if (customer.id == null) return;
+    final db = await _db;
+    await db.update(
+      TableNames.customers,
+      customer.toMap(),
+      where: '${CustomerColumns.id} = ?',
+      whereArgs: [customer.id],
+    );
+  }
+
+  /// Deletes a customer by their ID.
+  Future<void> deleteCustomer(int id) async {
+    final db = await _db;
+    await db.delete(
+      TableNames.customers,
+      where: '${CustomerColumns.id} = ?',
+      whereArgs: [id],
+    );
+  }
 }
