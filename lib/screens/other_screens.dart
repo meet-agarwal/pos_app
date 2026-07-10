@@ -4,17 +4,8 @@ import 'invoice_history/invoice_history_screen.dart';
 
 export 'invoice_history/invoice_history_screen.dart';
 export 'customers/customers_screen.dart';
+export 'reports/reports_screen.dart';
 
-class ReportsScreen extends StatelessWidget {
-  const ReportsScreen({super.key});
-  @override
-  Widget build(BuildContext context) => _PlaceholderContent(
-        icon: Icons.bar_chart_outlined,
-        title: 'Reports',
-        subtitle: 'Sales reports and analytics',
-        color: const Color(0xFFFFA000),
-      );
-}
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

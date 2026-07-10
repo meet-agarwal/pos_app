@@ -113,6 +113,48 @@ class InvoiceDao {
     return rows;
   }
 
+  /// Returns total sales (sum of total) for invoices within [start]..[end] (inclusive).
+  Future<double> getTotalSalesForDateRange(DateTime start, DateTime end) async {
+    final db = await _db;
+    final startStr = _fmtDate(start);
+    final endStr = _fmtDate(end);
+    
+    final result = await db.rawQuery(
+      '''
+      SELECT SUM(${InvoiceColumns.total}) as sum_total
+      FROM ${TableNames.invoices}
+      WHERE date(${InvoiceColumns.dateTime}) >= ?
+        AND date(${InvoiceColumns.dateTime}) <= ?
+      ''',
+      [startStr, endStr],
+    );
+    return (result.first['sum_total'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  /// Returns paginated invoices within [start]..[end] (inclusive).
+  Future<List<Map<String, dynamic>>> fetchReportsByDateRangePaginated(
+    DateTime start,
+    DateTime end, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final db = await _db;
+    final startStr = _fmtDate(start);
+    final endStr = _fmtDate(end);
+
+    return db.rawQuery(
+      '''
+      SELECT *
+      FROM ${TableNames.invoices}
+      WHERE date(${InvoiceColumns.dateTime}) >= ?
+        AND date(${InvoiceColumns.dateTime}) <= ?
+      ORDER BY ${InvoiceColumns.id} DESC
+      LIMIT ? OFFSET ?
+      ''',
+      [startStr, endStr, limit, offset],
+    );
+  }
+
   /// Returns all invoice_items rows for [invoiceId].
   Future<List<Map<String, dynamic>>> fetchItemsForInvoice(
       int invoiceId) async {
@@ -121,6 +163,19 @@ class InvoiceDao {
       TableNames.invoiceItems,
       where: '${InvoiceItemColumns.invoiceId} = ?',
       whereArgs: [invoiceId],
+      orderBy: InvoiceItemColumns.id,
+    );
+  }
+
+  /// Returns items for multiple invoices efficiently
+  Future<List<Map<String, dynamic>>> fetchItemsForInvoices(List<int> invoiceIds) async {
+    if (invoiceIds.isEmpty) return [];
+    final db = await _db;
+    final placeholders = List.filled(invoiceIds.length, '?').join(',');
+    return db.query(
+      TableNames.invoiceItems,
+      where: '${InvoiceItemColumns.invoiceId} IN ($placeholders)',
+      whereArgs: invoiceIds,
       orderBy: InvoiceItemColumns.id,
     );
   }
