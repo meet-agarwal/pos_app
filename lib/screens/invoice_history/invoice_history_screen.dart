@@ -21,7 +21,9 @@ import 'package:flutter/services.dart';
 import '../../dao/customer_dao.dart';
 import '../../dao/invoice_dao.dart';
 import '../../database/db_constants.dart';
+import '../../models/invoice.dart';
 import '../../models/item.dart';
+import '../../services/printer_service.dart';
 import '../../theme/app_theme.dart';
 import '../billing/models/bill_state.dart';
 
@@ -305,9 +307,7 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
       case 'delete':
         await _handleDelete(invoice);
       case 'print':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Print — coming soon')),
-        );
+        await _handlePrint(invoice);
     }
   }
 
@@ -405,6 +405,57 @@ class InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
       invoice.paymentMode,
       lineItems,
     );
+  }
+
+  Future<void> _handlePrint(_InvoiceRow invoice) async {
+    List<Map<String, dynamic>> items = invoice.items ?? [];
+    if (items.isEmpty) {
+      items = await InvoiceDao.instance.fetchItemsForInvoice(invoice.id);
+      if (mounted) {
+        setState(() {
+          invoice.items = items;
+        });
+      }
+    }
+
+    final lineItems = items.map((m) {
+      return BillLineItem(
+        item: Item(
+          id: m[InvoiceItemColumns.itemId] as int,
+          name: m[InvoiceItemColumns.itemName] as String,
+          hindiName: '', // Assuming hindiName isn't kept in invoice_items right now, this is a limitation, but for history print it might just show english unless we fetch full item
+          unit: m[InvoiceItemColumns.unit] as String,
+          sellingPrice: (m[InvoiceItemColumns.unitPrice] as num).toDouble(),
+        ),
+      )..quantity = (m[InvoiceItemColumns.quantity] as num).toDouble();
+    }).toList();
+
+    try {
+      final invoiceForPrint = Invoice(
+        id: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        customerId: invoice.customerId,
+        dateTime: invoice.dateTime,
+        subtotal: invoice.subtotal,
+        discount: invoice.discount,
+        total: invoice.total,
+        paymentMode: invoice.paymentMode,
+        paidAmount: invoice.paidAmount,
+      );
+
+      await PrinterService.instance.printInvoice(
+        invoice: invoiceForPrint,
+        lineItems: lineItems,
+        customerName: invoice.customerName,
+        customerMobile: invoice.customerMobile,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print failed: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   Future<void> _handleDelete(_InvoiceRow invoice) async {

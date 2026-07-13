@@ -47,6 +47,11 @@ dependencies:
   # Fonts – Noto Sans Devanagari for Hindi text
   google_fonts: ^6.2.1
 
+  # Printing & PDF generation
+  printing: ^5.11.1
+  pdf: ^3.10.8
+  shared_preferences: ^2.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

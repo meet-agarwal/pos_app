@@ -21,8 +21,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/customer.dart';
+import '../../../models/invoice.dart';
 import '../../../models/item.dart';
 import '../../../services/billing_service.dart';
+import '../../../services/printer_service.dart';
 import '../../../theme/app_theme.dart';
 import '../models/bill_state.dart';
 import 'action_buttons.dart';
@@ -201,7 +203,9 @@ class BillWorkspaceState extends State<BillWorkspace> {
     setState(() => _isSaving = true);
 
     try {
+      String savedInvoiceNo;
       if (isEditMode) {
+        savedInvoiceNo = widget.editInvoiceNo!;
         await BillingService.instance.updateFullBill(
           invoiceId: widget.editInvoiceId!,
           customerName: _nameCtrl.text,
@@ -217,7 +221,7 @@ class BillWorkspaceState extends State<BillWorkspace> {
         _showSnackBar('Invoice ${widget.editInvoiceNo} updated successfully ✓');
         widget.onEditComplete?.call();
       } else {
-        final invoiceNo = await BillingService.instance.saveBill(
+        savedInvoiceNo = await BillingService.instance.saveBill(
           customerName: _nameCtrl.text,
           customerMobile: _mobileCtrl.text,
           lineItems: _lineItems,
@@ -229,11 +233,40 @@ class BillWorkspaceState extends State<BillWorkspace> {
         );
 
         if (!mounted) return;
-        _showSnackBar('Invoice $invoiceNo saved successfully ✓');
+        _showSnackBar('Invoice $savedInvoiceNo saved successfully ✓');
+      }
+
+      // Trigger print if andPrint == true
+      if (andPrint) {
+        try {
+          final invoiceForPrint = Invoice(
+            id: isEditMode ? widget.editInvoiceId! : 0,
+            invoiceNo: savedInvoiceNo,
+            customerId: null,
+            dateTime: DateTime.now(),
+            subtotal: _subtotal,
+            discount: _discount,
+            total: _total,
+            paymentMode: _paymentMode,
+            paidAmount: _total,
+          );
+          await PrinterService.instance.printInvoice(
+            invoice: invoiceForPrint,
+            lineItems: _lineItems,
+            customerName: _nameCtrl.text,
+            customerMobile: _mobileCtrl.text,
+          );
+        } catch (printErr) {
+          if (mounted) {
+            _showSnackBar('Saved, but printing failed: $printErr', isError: true);
+          }
+        }
+      }
+
+      if (!isEditMode) {
         _resetWorkspace();
       }
 
-      // TODO (future): trigger print if andPrint == true
 
     } catch (e) {
       if (!mounted) return;
