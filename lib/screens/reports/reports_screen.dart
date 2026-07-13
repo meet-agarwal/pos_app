@@ -224,13 +224,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDateField('From Date (dd/mm/yyyy)', _fromDateCtrl),
+          _buildDateField('From Date', _fromDateCtrl),
           const SizedBox(width: 16),
-          _buildDateField('To Date (dd/mm/yyyy)', _toDateCtrl),
+          _buildDateField('To Date', _toDateCtrl),
           const SizedBox(width: 16),
           Container(
             margin: const EdgeInsets.only(top: 22),
-            height: 40,
             child: ElevatedButton(
               onPressed: _applyFilter,
               child: const Text('Filter Reports'),

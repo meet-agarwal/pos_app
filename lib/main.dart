@@ -12,7 +12,9 @@
 
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:device_preview/device_preview.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'app_shell.dart';
@@ -33,7 +35,12 @@ void main() async {
   // All four tables are created here on the first run.
   await DatabaseHelper.instance.database;
 
-  runApp(const PosApp());
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      builder: (context) => const PosApp(),
+    ),
+  );
 }
 
 class PosApp extends StatelessWidget {
@@ -44,6 +51,8 @@ class PosApp extends StatelessWidget {
     return MaterialApp(
       title: 'POS System',
       debugShowCheckedModeBanner: false,
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
       theme: AppTheme.light,
       home: const AppShell(),
     );
