@@ -31,7 +31,7 @@ import 'action_buttons.dart';
 import 'bill_items_table.dart';
 import 'bill_totals_panel.dart';
 import 'customer_section.dart';
-import 'item_search_field.dart';
+import 'item_entry_row.dart';
 
 class BillWorkspace extends StatefulWidget {
   /// Full item catalogue loaded once by BillingScreen and shared
@@ -151,14 +151,14 @@ class BillWorkspaceState extends State<BillWorkspace> {
     setState(() => _linkedCustomer = c);
   }
 
-  void _addItem(Item item) {
+  void _addItem(Item item, double qty, double price) {
     setState(() {
-      // Increment quantity if item already present
-      final idx = _lineItems.indexWhere((li) => li.item.id == item.id);
+      // Increment quantity if item already present with the same price
+      final idx = _lineItems.indexWhere((li) => li.item.id == item.id && li.price == price);
       if (idx >= 0) {
-        _lineItems[idx].quantity += 1;
+        _lineItems[idx].quantity += qty;
       } else {
-        _lineItems.add(BillLineItem(item: item));
+        _lineItems.add(BillLineItem(item: item, quantity: qty, price: price));
       }
     });
   }
@@ -169,6 +169,10 @@ class BillWorkspaceState extends State<BillWorkspace> {
       return;
     }
     setState(() => _lineItems[index].quantity = qty);
+  }
+
+  void _updatePrice(int index, double price) {
+    setState(() => _lineItems[index].price = price);
   }
 
   void _removeItem(int index) {
@@ -319,10 +323,10 @@ class BillWorkspaceState extends State<BillWorkspace> {
             ),
             const SizedBox(height: 10),
 
-            // ── Item search ─────────────────────────────────
-            ItemSearchField(
+            // ── Item entry row ──────────────────────────────
+            ItemEntryRow(
               allItems: widget.allItems,
-              onItemSelected: _addItem,
+              onAddItem: _addItem,
             ),
             const SizedBox(height: 10),
 
@@ -337,6 +341,7 @@ class BillWorkspaceState extends State<BillWorkspace> {
                     child: BillItemsTable(
                       items: _lineItems,
                       onQtyChanged: _updateQty,
+                      onPriceChanged: _updatePrice,
                       onRemove: _removeItem,
                     ),
                   ),

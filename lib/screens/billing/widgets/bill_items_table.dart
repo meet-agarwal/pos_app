@@ -18,6 +18,9 @@ class BillItemsTable extends StatelessWidget {
 
   /// Called with (rowIndex, newQuantity) when the user edits a qty.
   final void Function(int index, double qty) onQtyChanged;
+  
+  /// Called with (rowIndex, newPrice) when the user edits a price.
+  final void Function(int index, double price) onPriceChanged;
 
   /// Called with rowIndex when the user taps the delete button.
   final ValueChanged<int> onRemove;
@@ -26,6 +29,7 @@ class BillItemsTable extends StatelessWidget {
     super.key,
     required this.items,
     required this.onQtyChanged,
+    required this.onPriceChanged,
     required this.onRemove,
   });
 
@@ -55,6 +59,7 @@ class BillItemsTable extends StatelessWidget {
                       rowIndex: i,
                       isEven: i.isEven,
                       onQtyChanged: (qty) => onQtyChanged(i, qty),
+                      onPriceChanged: (price) => onPriceChanged(i, price),
                       onRemove: () => onRemove(i),
                     ),
                   ),
@@ -139,6 +144,7 @@ class _BillRow extends StatefulWidget {
   final int rowIndex;
   final bool isEven;
   final ValueChanged<double> onQtyChanged;
+  final ValueChanged<double> onPriceChanged;
   final VoidCallback onRemove;
 
   const _BillRow({
@@ -147,6 +153,7 @@ class _BillRow extends StatefulWidget {
     required this.rowIndex,
     required this.isEven,
     required this.onQtyChanged,
+    required this.onPriceChanged,
     required this.onRemove,
   });
 
@@ -157,17 +164,19 @@ class _BillRow extends StatefulWidget {
 class _BillRowState extends State<_BillRow> {
   late final TextEditingController _qtyCtrl;
   late final FocusNode _qtyFocus;
+  late final TextEditingController _priceCtrl;
+  late final FocusNode _priceFocus;
   bool _hovering = false;
 
   @override
   void initState() {
     super.initState();
     _qtyCtrl = TextEditingController(text: _fmtQty(widget.lineItem.quantity));
+    _priceCtrl = TextEditingController(text: widget.lineItem.price.toStringAsFixed(2));
 
     _qtyFocus = FocusNode()
       ..addListener(() {
         if (_qtyFocus.hasFocus) {
-          // Select all on focus for fast overwrite
           Future.microtask(() {
             _qtyCtrl.selection = TextSelection(
               baseOffset: 0,
@@ -175,8 +184,21 @@ class _BillRowState extends State<_BillRow> {
             );
           });
         } else {
-          // Commit on focus-out
-          _commit(_qtyCtrl.text);
+          _commitQty(_qtyCtrl.text);
+        }
+      });
+
+    _priceFocus = FocusNode()
+      ..addListener(() {
+        if (_priceFocus.hasFocus) {
+          Future.microtask(() {
+            _priceCtrl.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _priceCtrl.text.length,
+            );
+          });
+        } else {
+          _commitPrice(_priceCtrl.text);
         }
       });
   }
@@ -184,11 +206,11 @@ class _BillRowState extends State<_BillRow> {
   @override
   void didUpdateWidget(_BillRow old) {
     super.didUpdateWidget(old);
-    // Keep the text field in sync when the parent recalculates
-    // (e.g. after an external qty update) but don't stomp while focused.
-    if (!_qtyFocus.hasFocus &&
-        old.lineItem.quantity != widget.lineItem.quantity) {
+    if (!_qtyFocus.hasFocus && old.lineItem.quantity != widget.lineItem.quantity) {
       _qtyCtrl.text = _fmtQty(widget.lineItem.quantity);
+    }
+    if (!_priceFocus.hasFocus && old.lineItem.price != widget.lineItem.price) {
+      _priceCtrl.text = widget.lineItem.price.toStringAsFixed(2);
     }
   }
 
@@ -196,20 +218,30 @@ class _BillRowState extends State<_BillRow> {
   void dispose() {
     _qtyCtrl.dispose();
     _qtyFocus.dispose();
+    _priceCtrl.dispose();
+    _priceFocus.dispose();
     super.dispose();
   }
 
   String _fmtQty(double q) =>
       q == q.truncateToDouble() ? q.toInt().toString() : q.toString();
 
-  void _commit(String text) {
+  void _commitQty(String text) {
     final q = double.tryParse(text.trim());
     if (q == null || q <= 0) {
-      // Revert to last valid value
       _qtyCtrl.text = _fmtQty(widget.lineItem.quantity);
       return;
     }
     widget.onQtyChanged(q);
+  }
+
+  void _commitPrice(String text) {
+    final p = double.tryParse(text.trim());
+    if (p == null || p < 0) {
+      _priceCtrl.text = widget.lineItem.price.toStringAsFixed(2);
+      return;
+    }
+    widget.onPriceChanged(p);
   }
 
   @override
@@ -305,7 +337,7 @@ class _BillRowState extends State<_BillRow> {
                             FilteringTextInputFormatter.allow(
                                 RegExp(r'[\d.]')),
                           ],
-                          onSubmitted: _commit,
+                          onSubmitted: _commitQty,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -336,14 +368,44 @@ class _BillRowState extends State<_BillRow> {
                     ),
                   ),
 
-                  // Unit price
+                  // Unit price — inline editable
                   SizedBox(
                     width: 96,
-                    child: Text(
-                      '₹${item.sellingPrice.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
-                      textAlign: TextAlign.right,
+                    child: Center(
+                      child: SizedBox(
+                        width: 78,
+                        child: TextField(
+                          controller: _priceCtrl,
+                          focusNode: _priceFocus,
+                          textAlign: TextAlign.right,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                          ],
+                          onSubmitted: _commitPrice,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(color: Colors.transparent),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(color: Colors.transparent),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                            ),
+                            hoverColor: AppColors.tableBorder.withOpacity(0.3),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
 

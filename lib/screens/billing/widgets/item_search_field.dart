@@ -20,10 +20,17 @@ class ItemSearchField extends StatefulWidget {
   /// Called when the user selects an item from the dropdown.
   final ValueChanged<Item> onItemSelected;
 
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final bool clearOnSelect;
+
   const ItemSearchField({
     super.key,
     required this.allItems,
     required this.onItemSelected,
+    this.controller,
+    this.focusNode,
+    this.clearOnSelect = true,
   });
 
   @override
@@ -31,7 +38,7 @@ class ItemSearchField extends StatefulWidget {
 }
 
 class _ItemSearchFieldState extends State<ItemSearchField> {
-  final _ctrl = TextEditingController();
+  late final TextEditingController _ctrl;
   late final FocusNode _focusNode;
   final _overlayCtrl = OverlayPortalController();
   final _layerLink = LayerLink();
@@ -44,12 +51,14 @@ class _ItemSearchFieldState extends State<ItemSearchField> {
   void initState() {
     super.initState();
 
-    _focusNode = FocusNode(
-      onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        return _handleKey(event.logicalKey);
-      },
-    )..addListener(_onFocusChange);
+    _ctrl = widget.controller ?? TextEditingController();
+    
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.onKeyEvent = (_, event) {
+      if (event is! KeyDownEvent) return KeyEventResult.ignored;
+      return _handleKey(event.logicalKey);
+    };
+    _focusNode.addListener(_onFocusChange);
 
     _ctrl.addListener(_onTextChange);
   }
@@ -57,9 +66,10 @@ class _ItemSearchFieldState extends State<ItemSearchField> {
   @override
   void dispose() {
     _ctrl.removeListener(_onTextChange);
-    _ctrl.dispose();
+    if (widget.controller == null) _ctrl.dispose();
+    
     _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
+    if (widget.focusNode == null) _focusNode.dispose();
     super.dispose();
   }
 
@@ -147,13 +157,17 @@ class _ItemSearchFieldState extends State<ItemSearchField> {
 
   void _selectItem(Item item) {
     widget.onItemSelected(item);
-    _ctrl.clear();
+    if (widget.clearOnSelect) {
+      _ctrl.clear();
+    }
     setState(() {
       _suggestions = [];
       _highlighted = -1;
     });
     _closeDropdown();
-    _focusNode.requestFocus();
+    if (widget.clearOnSelect) {
+      _focusNode.requestFocus();
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────
