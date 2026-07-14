@@ -57,7 +57,9 @@ class _AppShellState extends State<AppShell> {
               index: _selectedIndex,
               children: [
                 BillingScreen(key: _billingKey),         // index 0
-                const ItemsScreen(),           // index 1
+                ItemsScreen(
+                  onItemsChanged: () => _billingKey.currentState?.refreshItems(),
+                ), // index 1
                 InvoiceHistoryScreen(
                   key: _invoiceHistoryKey,
                   onEditInvoice: (invoiceId, invoiceNo, customerName, customerMobile, discount, paymentMode, lineItems) {

@@ -37,7 +37,12 @@ import 'widgets/upload_confirmation_dialog.dart';
 const int _kItemsPerPage = 15;
 
 class ItemsScreen extends StatefulWidget {
-  const ItemsScreen({super.key});
+  final VoidCallback? onItemsChanged;
+
+  const ItemsScreen({
+    super.key,
+    this.onItemsChanged,
+  });
 
   @override
   State<ItemsScreen> createState() => _ItemsScreenState();
@@ -89,6 +94,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
           _selectedIds = {};
           _currentPage = 0;
         });
+        widget.onItemsChanged?.call();
       }
     } catch (e) {
       if (mounted) {

@@ -63,6 +63,17 @@ class _ItemSearchFieldState extends State<ItemSearchField> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(ItemSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.allItems != oldWidget.allItems) {
+      // Re-run search if items changed (e.g. from refresh)
+      if (_ctrl.text.trim().isNotEmpty) {
+        _onTextChange();
+      }
+    }
+  }
+
   // ── Handlers ─────────────────────────────────────────────
 
   void _onTextChange() {
@@ -74,8 +85,8 @@ class _ItemSearchFieldState extends State<ItemSearchField> {
     }
     final hits = widget.allItems
         .where((item) =>
-            item.name.toLowerCase().contains(q) ||
-            (item.hindiName?.toLowerCase().contains(q) ?? false))
+            item.name.toLowerCase().startsWith(q) ||
+            (item.hindiName?.toLowerCase().startsWith(q) ?? false))
         .take(9)
         .toList();
 

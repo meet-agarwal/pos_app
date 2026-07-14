@@ -93,6 +93,11 @@ class BillingScreenState extends State<BillingScreen> {
     }
   }
 
+  /// Externally callable method to refresh the item catalogue.
+  Future<void> refreshItems() async {
+    await _loadItems();
+  }
+
   // ── Tab management ────────────────────────────────────────
 
   void _addTab() {
