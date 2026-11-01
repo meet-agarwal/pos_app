@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/customer.dart';
 import '../../../models/invoice.dart';
+import '../../../dao/invoice_dao.dart';
 import '../../../models/item.dart';
 import '../../../services/billing_service.dart';
 import '../../../services/printer_service.dart';
@@ -31,6 +32,7 @@ import 'action_buttons.dart';
 import 'bill_items_table.dart';
 import 'bill_totals_panel.dart';
 import 'customer_section.dart';
+import 'invoice_preview_dialog.dart';
 import 'item_entry_row.dart';
 
 class BillWorkspace extends StatefulWidget {
@@ -280,6 +282,35 @@ class BillWorkspaceState extends State<BillWorkspace> {
     }
   }
 
+  /// Shows the receipt as it would print, without saving the bill.
+  Future<void> _previewBill() async {
+    if (_lineItems.isEmpty) {
+      _showSnackBar('Add at least one item to preview.', isError: true);
+      return;
+    }
+    // Same number the bill will get on save; reading it changes nothing.
+    final invoiceNo =
+        widget.editInvoiceNo ?? await InvoiceDao.instance.generateInvoiceNo();
+    if (!mounted) return;
+    InvoicePreviewDialog.show(
+      context,
+      invoice: Invoice(
+        id: isEditMode ? widget.editInvoiceId! : 0,
+        invoiceNo: invoiceNo,
+        customerId: null,
+        dateTime: DateTime.now(),
+        subtotal: _subtotal,
+        discount: _discount,
+        total: _total,
+        paymentMode: _paymentMode,
+        paidAmount: _total,
+      ),
+      lineItems: _lineItems,
+      customerName: _nameCtrl.text,
+      customerMobile: _mobileCtrl.text,
+    );
+  }
+
   /// Clears all fields to start a fresh bill.
   void _resetWorkspace() {
     setState(() {
@@ -372,6 +403,7 @@ class BillWorkspaceState extends State<BillWorkspace> {
                           ),
                           child: ActionButtons(
                             isSaving: _isSaving,
+                            onPreview: _previewBill,
                             onSave: () => _saveBill(),
                             onSaveAndPrint: () => _saveBill(andPrint: true),
                           ),

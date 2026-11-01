@@ -16,12 +16,16 @@ class ActionButtons extends StatelessWidget {
   /// Called when the user taps "Print & Save".
   final VoidCallback? onSaveAndPrint;
 
+  /// Called when the user taps "Preview".
+  final VoidCallback? onPreview;
+
   /// When true the active button shows a loading indicator and
   /// all buttons are disabled to prevent double-taps.
   final bool isSaving;
 
   const ActionButtons({
     super.key,
+    this.onPreview,
     this.onSave,
     this.onSaveAndPrint,
     this.isSaving = false,
@@ -51,7 +55,7 @@ class ActionButtons extends StatelessWidget {
                 child: _OutlineActionButton(
                   label: 'Preview',
                   icon: Icons.visibility_outlined,
-                  onTap: isSaving ? null : () {},
+                  onTap: isSaving ? null : onPreview,
                 ),
               ),
               const SizedBox(width: 8),
