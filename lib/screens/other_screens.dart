@@ -80,6 +80,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showMessage('${printer.name} saved as the receipt printer.');
   }
 
+  Future<void> _setLanguage(PrinterLanguage language) async {
+    final saved = _saved;
+    if (saved == null) return;
+    final updated = saved.withLanguage(language);
+    await PrinterService.instance.savePrinter(updated);
+    if (mounted) setState(() => _saved = updated);
+  }
+
   Future<void> _remove() async {
     await PrinterService.instance.clearSavedPrinter();
     if (!mounted) return;
@@ -176,29 +184,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: saved == null
             ? const Text('No printer selected. Find a printer below and tap it.',
                 style: TextStyle(color: AppColors.textSecondary))
-            : Row(
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(saved.isBluetooth ? Icons.bluetooth : Icons.usb, color: AppColors.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(saved.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                        Text(saved.isBluetooth ? 'Bluetooth' : 'USB',
-                            style: const TextStyle(color: AppColors.textSecondary)),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      Icon(saved.isBluetooth ? Icons.bluetooth : Icons.usb, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(saved.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                            Text(saved.isBluetooth ? 'Bluetooth' : 'USB',
+                                style: const TextStyle(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _isTesting ? null : _testPrint,
+                        icon: _isTesting
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.print_outlined),
+                        label: const Text('Test print'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(onPressed: _remove, child: const Text('Remove')),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _isTesting ? null : _testPrint,
-                    icon: _isTesting
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.print_outlined),
-                    label: const Text('Test print'),
+                  const SizedBox(height: 16),
+                  const Text('Printer language',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'If a test print shows nothing, switch to the other language. '
+                    'The Xprinter XP-P201A uses TSC.',
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
-                  const SizedBox(width: 8),
-                  TextButton(onPressed: _remove, child: const Text('Remove')),
+                  const SizedBox(height: 8),
+                  SegmentedButton<PrinterLanguage>(
+                    segments: [
+                      for (final l in PrinterLanguage.values)
+                        ButtonSegment(value: l, label: Text(l.label)),
+                    ],
+                    selected: {saved.language},
+                    onSelectionChanged: (v) => _setLanguage(v.first),
+                  ),
                 ],
               ),
       ),

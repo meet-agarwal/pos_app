@@ -12,10 +12,21 @@ import '../models/invoice.dart';
 import '../screens/billing/models/bill_state.dart';
 import 'invoice_print_format.dart';
 
+/// The command language a printer understands. Receipt printers usually
+/// speak ESC/POS; label-style printers (e.g. Xprinter XP-P201A) speak TSC.
+enum PrinterLanguage {
+  escpos('ESC/POS'),
+  tspl('TSC');
+
+  final String label;
+  const PrinterLanguage(this.label);
+}
+
 /// A thermal printer the user picked in Settings (Bluetooth or USB).
 class SavedPrinter {
   final PrinterType type;
   final String name;
+  final PrinterLanguage language;
 
   /// Bluetooth MAC address.
   final String? address;
@@ -27,10 +38,20 @@ class SavedPrinter {
   const SavedPrinter({
     required this.type,
     required this.name,
+    this.language = PrinterLanguage.escpos,
     this.address,
     this.vendorId,
     this.productId,
   });
+
+  SavedPrinter withLanguage(PrinterLanguage language) => SavedPrinter(
+        type: type,
+        name: name,
+        language: language,
+        address: address,
+        vendorId: vendorId,
+        productId: productId,
+      );
 
   bool get isBluetooth => type == PrinterType.bluetooth;
 
@@ -43,6 +64,7 @@ class SavedPrinter {
   Map<String, dynamic> toJson() => {
         'type': type.name,
         'name': name,
+        'language': language.name,
         'address': address,
         'vendorId': vendorId,
         'productId': productId,
@@ -51,6 +73,8 @@ class SavedPrinter {
   factory SavedPrinter.fromJson(Map<String, dynamic> json) => SavedPrinter(
         type: PrinterType.values.byName(json['type'] as String),
         name: json['name'] as String,
+        language: PrinterLanguage.values.asNameMap()[json['language']] ??
+            PrinterLanguage.escpos,
         address: json['address'] as String?,
         vendorId: json['vendorId'] as String?,
         productId: json['productId'] as String?,
@@ -142,7 +166,13 @@ class PrinterService {
       customerName: customerName,
       customerMobile: customerMobile,
     );
-    await _sendToPrinter(printer, await _escPosFromPdf(pdf));
+    final image = await _rasterize(pdf);
+    await _sendToPrinter(
+      printer,
+      printer.language == PrinterLanguage.tspl
+          ? _tsplFromImage(image)
+          : await _escPosFromImage(image),
+    );
   }
 
   /// Prints a few lines so the user can check the connection and Hindi.
@@ -152,21 +182,37 @@ class PrinterService {
       throw Exception('No printer selected. Please select one in Settings.');
     }
 
+    final connection = printer.isBluetooth ? 'Bluetooth' : 'USB';
+    if (printer.language == PrinterLanguage.tspl) {
+      String clean(String t) => t.replaceAll(RegExp(r'[^\x20-\x7E]'), '?').replaceAll('"', "'");
+      final lines = [
+        'SIZE 48 mm,30 mm',
+        'GAP 0 mm,0 mm',
+        'DIRECTION 0',
+        'CLS',
+        'TEXT 16,16,"3",0,1,1,"Test print"',
+        'TEXT 16,64,"2",0,1,1,"Printer: ${clean(printer.name)}"',
+        'TEXT 16,96,"2",0,1,1,"Connection: $connection"',
+        'PRINT 1,1',
+      ];
+      await _sendToPrinter(printer, ascii.encode('${lines.join('\r\n')}\r\n'));
+      return;
+    }
+
     final generator = Generator(PaperSize.mm58, await CapabilityProfile.load());
     final bytes = <int>[
       ...generator.reset(),
       ...generator.text('Test print', styles: const PosStyles(align: PosAlign.center, bold: true)),
       ...generator.text('Printer: ${printer.name}'),
-      ...generator.text('Connection: ${printer.isBluetooth ? 'Bluetooth' : 'USB'}'),
+      ...generator.text('Connection: $connection'),
       ...generator.cut(),
     ];
     await _sendToPrinter(printer, bytes);
   }
 
-  /// Rasterises the receipt PDF to the printer's width and wraps it in
-  /// ESC/POS commands. Printing the picture (not text) is what lets Hindi
-  /// come out correctly on any printer.
-  Future<List<int>> _escPosFromPdf(Uint8List pdfBytes) async {
+  /// Rasterises the receipt PDF to one printer-width picture. Printing the
+  /// picture (not text) is what lets Hindi come out correctly on any printer.
+  Future<img.Image> _rasterize(Uint8List pdfBytes) async {
     // Pick the resolution that makes the page exactly one printer-width wide.
     final dpi = _paperWidthDots * 72 / PdfPageFormat.roll57.width;
 
@@ -186,15 +232,46 @@ class PrinterService {
         blend(rgba[i + 2]),
       );
     }
-    final image = rgb.width == _paperWidthDots
+    return rgb.width == _paperWidthDots
         ? rgb
         : img.copyResize(rgb, width: _paperWidthDots);
+  }
 
+  Future<List<int>> _escPosFromImage(img.Image image) async {
     final generator = Generator(PaperSize.mm58, await CapabilityProfile.load());
     return [
       ...generator.reset(),
       ...generator.imageRaster(image),
       ...generator.cut(),
+    ];
+  }
+
+  /// TSC (TSPL) label-language version: the picture goes in a BITMAP command
+  /// where a 1 bit is white and a 0 bit is black.
+  List<int> _tsplFromImage(img.Image image) {
+    final widthBytes = image.width ~/ 8;
+    final heightMm = (image.height / 8).ceil(); // 203 dpi is about 8 dots/mm
+
+    final data = <int>[];
+    for (var y = 0; y < image.height; y++) {
+      for (var b = 0; b < widthBytes; b++) {
+        var byte = 0;
+        for (var bit = 0; bit < 8; bit++) {
+          final white = img.getLuminance(image.getPixel(b * 8 + bit, y)) >= 128;
+          byte = (byte << 1) | (white ? 1 : 0);
+        }
+        data.add(byte);
+      }
+    }
+
+    return [
+      ...ascii.encode('SIZE 48 mm,$heightMm mm\r\n'
+          'GAP 0 mm,0 mm\r\n'
+          'DIRECTION 0\r\n'
+          'CLS\r\n'
+          'BITMAP 0,0,$widthBytes,${image.height},0,'),
+      ...data,
+      ...ascii.encode('\r\nPRINT 1,1\r\n'),
     ];
   }
 
@@ -229,11 +306,8 @@ class PrinterService {
     if (!sent) {
       throw Exception('Could not send data to "${printer.name}".');
     }
-
-    // Let the printer finish receiving before the link is dropped.
-    if (printer.isBluetooth) {
-      await Future<void>.delayed(const Duration(seconds: 1));
-      await _manager.disconnect(type: PrinterType.bluetooth);
-    }
+    // The Bluetooth link is left open on purpose: closing it ourselves makes
+    // the plugin show a "lost connection" message. connect() reuses an open
+    // link and reconnects if the printer dropped it.
   }
 }
