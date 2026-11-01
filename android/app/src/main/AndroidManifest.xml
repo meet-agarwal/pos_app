@@ -9,6 +9,10 @@
         tools:ignore="ScopedStorage"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- USB thermal printers connect through the tablet's USB (OTG) port.
+         Bluetooth permissions come from the printer plugin's own manifest. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false"/>
+
     <application
         android:label="My Shop"
         android:name="${applicationName}"
