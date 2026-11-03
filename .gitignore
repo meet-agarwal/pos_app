@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 android/build/
+
+# Vendor SDK download (only the .aar in android/app/libs is used)
+Android SDK 3.5.8/

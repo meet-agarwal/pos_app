@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
@@ -11,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/invoice.dart';
 import '../screens/billing/models/bill_state.dart';
 import 'invoice_print_format.dart';
+import 'printer_log.dart';
+import 'xprinter_bridge.dart';
 
 /// The command language a printer understands. Receipt printers usually
 /// speak ESC/POS; label-style printers (e.g. Xprinter XP-P201A) speak TSC.
@@ -20,6 +23,16 @@ enum PrinterLanguage {
 
   final String label;
   const PrinterLanguage(this.label);
+}
+
+/// How bytes reach the printer. The Xprinter SDK is the maker's own transport;
+/// the plugin is the general-purpose one we used first.
+enum PrinterTransport {
+  sdk('Xprinter SDK'),
+  plugin('Plugin');
+
+  final String label;
+  const PrinterTransport(this.label);
 }
 
 /// A thermal printer the user picked in Settings (Bluetooth or USB).
@@ -86,6 +99,7 @@ class PrinterService {
   static final PrinterService instance = PrinterService._();
 
   static const String _printerKey = 'default_printer';
+  static const String _transportKey = 'printer_transport';
 
   /// 58mm thermal printers print 384 dots across.
   static const int _paperWidthDots = 384;
@@ -146,7 +160,21 @@ class PrinterService {
     await prefs.remove(_printerKey);
   }
 
+  Future<PrinterTransport> getTransport() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_transportKey);
+    return PrinterTransport.values.asNameMap()[saved] ??
+        (Platform.isAndroid ? PrinterTransport.sdk : PrinterTransport.plugin);
+  }
+
+  Future<void> setTransport(PrinterTransport transport) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_transportKey, transport.name);
+    PrinterLog.instance.add('app', 'connection method set to ${transport.label}');
+  }
+
   // ── Printing ──────────────────────────────────────────────
+
 
   /// Prints an invoice on the saved printer.
   Future<void> printInvoice({
@@ -275,7 +303,69 @@ class PrinterService {
     ];
   }
 
+  bool _pluginLogging = false;
+
+  /// Copies the plugin's Bluetooth/USB state changes into the printer log.
+  void _startPluginLogging() {
+    if (_pluginLogging) return;
+    _pluginLogging = true;
+    _manager.stateBluetooth.listen(
+      (s) => PrinterLog.instance.add('plugin', 'bluetooth state: ${s.name}'),
+      onError: (Object e) => PrinterLog.instance.add('plugin', 'bluetooth state error: $e'),
+    );
+    _manager.stateUSB.listen(
+      (s) => PrinterLog.instance.add('plugin', 'usb state: ${s.name}'),
+      onError: (Object e) => PrinterLog.instance.add('plugin', 'usb state error: $e'),
+    );
+  }
+
   Future<void> _sendToPrinter(SavedPrinter printer, List<int> bytes) async {
+    final transport = await getTransport();
+    final log = PrinterLog.instance;
+    log.add(
+      'app',
+      'print ${bytes.length} bytes to "${printer.name}" '
+      '(${printer.isBluetooth ? 'Bluetooth' : 'USB'}, ${printer.language.label}, ${transport.label})',
+    );
+    try {
+      if (transport == PrinterTransport.sdk) {
+        await _sendWithSdk(printer, Uint8List.fromList(bytes));
+      } else {
+        await _sendWithPlugin(printer, bytes);
+      }
+      log.add('app', 'print finished');
+    } catch (e) {
+      log.add('app', 'print FAILED: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _sendWithSdk(SavedPrinter printer, Uint8List bytes) async {
+    final bridge = XprinterBridge.instance..startLogging();
+    final connected = await bridge.connect(
+      type: printer.isBluetooth ? 'bluetooth' : 'usb',
+      address: printer.address,
+      vendorId: printer.vendorId,
+      productId: printer.productId,
+    );
+    if (!connected) {
+      throw Exception(
+        'Could not connect to "${printer.name}". Check it is switched on '
+        'and ${printer.isBluetooth ? 'paired in Bluetooth settings' : 'plugged in'}.',
+      );
+    }
+
+    final result = await bridge.send(bytes);
+    if (!result.queued) {
+      throw Exception('Not connected to "${printer.name}" when sending.');
+    }
+    if (!result.connected) {
+      throw Exception('The link to "${printer.name}" dropped while sending. See the printer log.');
+    }
+  }
+
+  Future<void> _sendWithPlugin(SavedPrinter printer, List<int> bytes) async {
+    _startPluginLogging();
     final bool connected;
     if (printer.isBluetooth) {
       connected = await _manager.connect(
@@ -295,6 +385,7 @@ class PrinterService {
         ),
       );
     }
+    PrinterLog.instance.add('plugin', 'connect returned $connected');
     if (!connected) {
       throw Exception(
         'Could not connect to "${printer.name}". Check it is switched on '
@@ -303,6 +394,7 @@ class PrinterService {
     }
 
     final sent = await _manager.send(type: printer.type, bytes: bytes);
+    PrinterLog.instance.add('plugin', 'send returned $sent');
     if (!sent) {
       throw Exception('Could not send data to "${printer.name}".');
     }

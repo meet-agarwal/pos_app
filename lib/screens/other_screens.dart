@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import 'invoice_history/invoice_history_screen.dart';
 
 export 'invoice_history/invoice_history_screen.dart';
 export 'customers/customers_screen.dart';
 export 'reports/reports_screen.dart';
+import '../services/printer_log.dart';
 import '../services/printer_service.dart';
 
 
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   SavedPrinter? _saved;
+  PrinterTransport _transport = PrinterTransport.sdk;
   List<SavedPrinter> _found = [];
   String? _foundLabel;
   bool _isSearching = false;
@@ -31,7 +34,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSaved() async {
     final saved = await PrinterService.instance.getSavedPrinter();
-    if (mounted) setState(() => _saved = saved);
+    final transport = await PrinterService.instance.getTransport();
+    await PrinterLog.instance.load();
+    if (mounted) {
+      setState(() {
+        _saved = saved;
+        _transport = transport;
+      });
+    }
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -86,6 +96,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final updated = saved.withLanguage(language);
     await PrinterService.instance.savePrinter(updated);
     if (mounted) setState(() => _saved = updated);
+  }
+
+  Future<void> _setTransport(PrinterTransport transport) async {
+    await PrinterService.instance.setTransport(transport);
+    if (mounted) setState(() => _transport = transport);
+  }
+
+  Future<void> _copyLog() async {
+    await Clipboard.setData(ClipboardData(text: PrinterLog.instance.text));
+    if (mounted) _showMessage('Printer log copied. Paste it into a message to share it.');
   }
 
   Future<void> _remove() async {
@@ -169,10 +189,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
               ],
+              const SizedBox(height: 24),
+              _buildLog(),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLog() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListenableBuilder(
+          listenable: PrinterLog.instance,
+          builder: (context, _) {
+            final lines = PrinterLog.instance.lines;
+            final shown = lines.length > 80 ? lines.sublist(lines.length - 80) : lines;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Printer log',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: lines.isEmpty ? null : _copyLog,
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Copy'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: lines.isEmpty ? null : PrinterLog.instance.clear,
+                      child: const Text('Clear'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  padding: const EdgeInsets.all(8),
+                  color: const Color(0xFFF4F5F7),
+                  child: SingleChildScrollView(
+                    reverse: true,
+                    child: SelectableText(
+                      shown.isEmpty ? 'Nothing logged yet. Try a test print.' : shown.join('\n'),
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -229,6 +303,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                     selected: {saved.language},
                     onSelectionChanged: (v) => _setLanguage(v.first),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Connection method',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Xprinter SDK is the printer maker\'s own connection. '
+                    'Switch to Plugin if the SDK does not work.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<PrinterTransport>(
+                    segments: [
+                      for (final t in PrinterTransport.values)
+                        ButtonSegment(value: t, label: Text(t.label)),
+                    ],
+                    selected: {_transport},
+                    onSelectionChanged: (v) => _setTransport(v.first),
                   ),
                 ],
               ),
